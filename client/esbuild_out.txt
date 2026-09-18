@@ -1,0 +1,52 @@
+node : D:\VS_CODE\6. 
+Projects\1.Service_Provider\localfix2\client\node_modules\esbuild\lib\main.js:2146
+At line:1 char:66
++ ... x2\client'; node -e "require('esbuild').transformSync(require('fs').r ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (D:\VS_CODE\6. P...ib\main.js:2146:String) [], RemoteEx 
+   ception
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+      throw reject;
+      ^
+
+Error: Transform failed with 1 error:
+<stdin>:266:89: ERROR: Expected "..." but found "}"
+    at failureErrorWithLog (D:\VS_CODE\6. 
+Projects\1.Service_Provider\localfix2\client\node_modules\esbuild\lib\main.js:1467:15)
+    at D:\VS_CODE\6. 
+Projects\1.Service_Provider\localfix2\client\node_modules\esbuild\lib\main.js:736:50
+    at responseCallbacks.<computed> (D:\VS_CODE\6. 
+Projects\1.Service_Provider\localfix2\client\node_modules\esbuild\lib\main.js:603:9)
+    at handleIncomingPacket (D:\VS_CODE\6. 
+Projects\1.Service_Provider\localfix2\client\node_modules\esbuild\lib\main.js:658:12)
+    at Socket.readFromStdout (D:\VS_CODE\6. 
+Projects\1.Service_Provider\localfix2\client\node_modules\esbuild\lib\main.js:581:7)
+    at Socket.emit (node:events:509:28)
+    at addChunk (node:internal/streams/readable:563:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+    at Readable.push (node:internal/streams/readable:394:5)
+    at Pipe.onStreamRead (node:internal/stream_base_commons:189:23) {
+  errors: [
+    {
+      detail: undefined,
+      id: '',
+      location: {
+        column: 89,
+        file: '<stdin>',
+        length: 1,
+        line: 266,
+        lineText: '      {/* ----------------------------- Add Photos Modal 
+----------------------------- */}',
+        namespace: '',
+        suggestion: '...'
+      },
+      notes: [],
+      pluginName: '',
+      text: 'Expected "..." but found "}"'
+    }
+  ],
+  warnings: []
+}
+
+Node.js v24.18.0

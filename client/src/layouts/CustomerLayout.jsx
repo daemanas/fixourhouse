@@ -1,0 +1,35 @@
+import DashboardLayout from './DashboardLayout';
+import {
+  LayoutDashboard,
+  Search,
+  CalendarCheck,
+  MessageSquareWarning,
+  Heart,
+  Bell,
+  User,
+  Settings,
+} from 'lucide-react';
+
+const items = [
+  { to: '/customer/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/customer/search', label: 'Search Services', icon: Search },
+  { to: '/customer/bookings', label: 'My Bookings', icon: CalendarCheck },
+  { to: '/customer/complaints', label: 'My Complaints', icon: MessageSquareWarning },
+  { to: '/customer/wishlist', label: 'Wishlist', icon: Heart },
+  { to: '/customer/notifications', label: 'Notifications', icon: Bell },
+  { to: '/customer/profile', label: 'My Profile', icon: User },
+  { to: '/customer/settings', label: 'Settings', icon: Settings },
+];
+
+export function CustomerLayout() {
+  return (
+    <DashboardLayout
+      items={items}
+      title="Customer Dashboard"
+      subtitle="Find and book trusted local services"
+      showSearch
+    />
+  );
+}
+
+export default CustomerLayout;

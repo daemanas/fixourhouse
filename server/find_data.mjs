@@ -1,0 +1,11 @@
+import mongoose from 'mongoose';
+const uri = 'mongodb://localhost:27017/localfix';
+await mongoose.connect(uri);
+const Booking = mongoose.model('Booking', new mongoose.Schema({}, { strict: false }), 'bookings');
+const User = mongoose.model('User', new mongoose.Schema({}, { strict: false }), 'users');
+const bks = await Booking.find({ status: { $in: ['accepted', 'working', 'completed'] } }).limit(5);
+console.log('eligible bookings:', bks.length);
+bks.forEach((b) => console.log('  ', b._id, 'cust=' + b.customerId, 'prov=' + b.providerId, 'status=' + b.status));
+const users = await User.find({ role: { $in: ['customer', 'admin'] } }).limit(10);
+console.log('users:', users.map((u) => u.phone + '/' + u.name + '/' + u.role));
+process.exit(0);
