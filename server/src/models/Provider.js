@@ -116,12 +116,21 @@ const providerSchema = new mongoose.Schema(
     location: {
       address: String,
       city: String,
+      district: String,
       state: String,
       pincode: String,
       coordinates: {
         type: { type: String, enum: ['Point'], default: 'Point' },
         coordinates: { type: [Number], default: [0, 0] },
       },
+    },
+    serviceArea: {
+      type: [String],
+      default: [],
+    },
+    serviceRadius: {
+      type: Number,
+      default: 15,
     },
     experience: {
       type: Number,
@@ -221,6 +230,8 @@ const providerSchema = new mongoose.Schema(
 // Indexes
 providerSchema.index({ userId: 1 });
 providerSchema.index({ category: 1 });
+providerSchema.index({ 'location.city': 1 });
+providerSchema.index({ serviceArea: 1 });
 providerSchema.index({ 'location.coordinates': '2dsphere' });
 providerSchema.index({ verificationStatus: 1 });
 providerSchema.index({ rating: -1 });

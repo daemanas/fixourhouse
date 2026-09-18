@@ -41,13 +41,47 @@ export const getProviders = asyncHandler(async (req, res) => {
   const filter = { verificationStatus: 'approved' };
 
   if (req.query.category) filter.category = req.query.category;
-  if (req.query.city) filter['location.city'] = req.query.city;
   if (req.query.minRating) filter.rating = { $gte: parseFloat(req.query.minRating) };
-  if (req.query.q) {
-    filter.$or = [
-      { businessName: { $regex: req.query.q, $options: 'i' } },
-      { description: { $regex: req.query.q, $options: 'i' } },
-    ];
+
+  const andConditions = [];
+
+  const cityParam = (req.query.city || req.query.location || '').trim();
+  if (cityParam) {
+    const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escaped = escapeRegex(cityParam);
+
+    // Exact string match (case-insensitive & whitespace-safe)
+    const exactRegex = new RegExp(`^\\s*${escaped}\\s*$`, 'i');
+
+    // Boundary/segment match for multi-word or comma-separated addresses (e.g. "Main St, Mathabhanga")
+    const segmentRegex = new RegExp(`(?:^|[,\\s])${escaped}(?:[,\\s]|$)`, 'i');
+
+    andConditions.push({
+      $or: [
+        { 'location.city': exactRegex },
+        { 'location.city': segmentRegex },
+        { 'location.district': exactRegex },
+        { 'location.district': segmentRegex },
+        { 'location.address': exactRegex },
+        { 'location.address': segmentRegex },
+        { serviceArea: exactRegex },
+        { serviceArea: segmentRegex },
+      ],
+    });
+  }
+
+  if (req.query.q && req.query.q.trim()) {
+    const qRegex = new RegExp(req.query.q.trim(), 'i');
+    andConditions.push({
+      $or: [
+        { businessName: qRegex },
+        { description: qRegex },
+      ],
+    });
+  }
+
+  if (andConditions.length > 0) {
+    filter.$and = andConditions;
   }
 
   const sort = {};
@@ -246,6 +280,8 @@ const PROVIDER_PROFILE_FIELDS = [
   'category',
   'experience',
   'location',
+  'serviceArea',
+  'serviceRadius',
   'availability',
   'pricing',
 ];

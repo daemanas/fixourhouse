@@ -456,6 +456,47 @@ export function BookingsPage() {
         onClose={() => setSelectedBooking(null)}
         title="Booking Details"
         size="lg"
+        footer={
+          selectedBooking && (
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              {selectedBooking.status === 'pending' && (
+                <Button
+                  variant="danger"
+                  onClick={() => {
+                    setShowCancelModal(true);
+                  }}
+                >
+                  Cancel Booking
+                </Button>
+              )}
+              {selectedBooking.status === 'accepted' && selectedBooking.providerId?.userId?.phone && (
+                <a
+                  href={`tel:${selectedBooking.providerId.userId.phone}`}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 text-sm font-medium hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
+                >
+                  <Phone className="h-4 w-4" />
+                  Call Provider
+                </a>
+              )}
+              {selectedBooking.status === 'completed' && (
+                <Button onClick={() => setShowReviewModal(true)}>
+                  <MessageSquare className="h-4 w-4" />
+                  Write Review
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => setShowComplaintModal(true)}
+              >
+                <MessageSquareWarning className="h-4 w-4" />
+                Raise Complaint
+              </Button>
+              <Button variant="outline" onClick={() => setSelectedBooking(null)}>
+                Close
+              </Button>
+            </div>
+          )
+        }
       >
         {selectedBooking && (
           <div className="space-y-6">
@@ -598,44 +639,6 @@ export function BookingsPage() {
                   </div>
                 ))}
               </div>
-            </div>
-
-            <div className="flex flex-wrap justify-end gap-3">
-              {selectedBooking.status === 'pending' && (
-                <Button
-                  variant="danger"
-                  onClick={() => {
-                    setShowCancelModal(true);
-                  }}
-                >
-                  Cancel Booking
-                </Button>
-              )}
-              {selectedBooking.status === 'accepted' && selectedBooking.providerId?.userId?.phone && (
-                <a
-                  href={`tel:${selectedBooking.providerId.userId.phone}`}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 text-sm font-medium hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
-                >
-                  <Phone className="h-4 w-4" />
-                  Call Provider
-                </a>
-              )}
-              {selectedBooking.status === 'completed' && (
-                <Button onClick={() => setShowReviewModal(true)}>
-                  <MessageSquare className="h-4 w-4" />
-                  Write Review
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                onClick={() => setShowComplaintModal(true)}
-              >
-                <MessageSquareWarning className="h-4 w-4" />
-                Raise Complaint
-              </Button>
-              <Button variant="outline" onClick={() => setSelectedBooking(null)}>
-                Close
-              </Button>
             </div>
           </div>
         )}

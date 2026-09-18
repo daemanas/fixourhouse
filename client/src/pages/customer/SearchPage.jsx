@@ -42,7 +42,15 @@ const formatPrice = (provider) => {
 const formatLocation = (provider) => {
   const loc = provider.location;
   if (!loc) return '';
-  return [loc.address, loc.city, loc.state].filter(Boolean).join(', ');
+  const parts = [];
+  if (loc.address) parts.push(loc.address);
+  if (loc.city && !parts.some((p) => p.toLowerCase() === loc.city.toLowerCase())) {
+    parts.push(loc.city);
+  }
+  if (loc.state && !parts.some((p) => p.toLowerCase() === loc.state.toLowerCase())) {
+    parts.push(loc.state);
+  }
+  return parts.filter(Boolean).join(', ');
 };
 
 export function SearchPage() {
@@ -55,7 +63,12 @@ export function SearchPage() {
   );
   const [sortBy, setSortBy] = useState('rating');
   const [minRating, setMinRating] = useState(0);
-  const [location, setLocation] = useState('');
+  const [location, setLocation] = useState(
+    () => searchParams.get('location') || user?.location || ''
+  );
+  const [isLocationInitialized, setIsLocationInitialized] = useState(
+    Boolean(searchParams.get('location') || user?.location)
+  );
   const [showFilters, setShowFilters] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -63,6 +76,19 @@ export function SearchPage() {
   const [pagination, setPagination] = useState({ total: 0, pages: 1 });
   const [page, setPage] = useState(1);
   const [wishlist, setWishlist] = useState([]);
+
+  // Auto-initialize location filter using user's saved location if not provided via searchParams
+  useEffect(() => {
+    if (!isLocationInitialized) {
+      if (searchParams.get('location')) {
+        setLocation(searchParams.get('location'));
+        setIsLocationInitialized(true);
+      } else if (user?.location) {
+        setLocation(user.location);
+        setIsLocationInitialized(true);
+      }
+    }
+  }, [user, isLocationInitialized, searchParams]);
 
   // Load categories from backend
   useEffect(() => {
@@ -119,13 +145,20 @@ export function SearchPage() {
       setLoading(true);
       setError(null);
       try {
+        const activeSearchTerm = params.searchTerm !== undefined ? params.searchTerm : searchTerm;
+        const activeCategory = params.category !== undefined ? params.category : selectedCategory;
+        const activeMinRating = params.minRating !== undefined ? params.minRating : minRating;
+        const activeLocation = params.location !== undefined ? params.location : location;
+        const activeSortBy = params.sortBy !== undefined ? params.sortBy : sortBy;
+        const activePage = params.page !== undefined ? params.page : page;
+
         const query = {};
-        if (params.searchTerm || searchTerm) query.q = params.searchTerm || searchTerm;
-        if (params.category && params.category !== 'All Categories') query.category = params.category;
-        if (params.minRating) query.minRating = params.minRating;
-        if (params.location) query.city = params.location;
-        if (params.sortBy) query.sort = params.sortBy;
-        query.page = params.page || page;
+        if (activeSearchTerm) query.q = activeSearchTerm;
+        if (activeCategory && activeCategory !== 'All Categories') query.category = activeCategory;
+        if (activeMinRating) query.minRating = activeMinRating;
+        if (activeLocation && activeLocation.trim()) query.city = activeLocation.trim();
+        if (activeSortBy) query.sort = activeSortBy;
+        query.page = activePage;
         query.limit = 9;
 
         const res = await getProviders(query);
@@ -138,12 +171,26 @@ export function SearchPage() {
         setLoading(false);
       }
     },
-    [selectedCategory, minRating, location, sortBy, page]
+    [searchTerm, selectedCategory, minRating, location, sortBy, page]
   );
 
   useEffect(() => {
     fetchProviders();
   }, [fetchProviders]);
+
+  const handleUseSavedLocation = () => {
+    if (user?.location) {
+      setLocation(user.location);
+      setPage(1);
+      fetchProviders({ page: 1, location: user.location });
+    }
+  };
+
+  const handleClearLocation = () => {
+    setLocation('');
+    setPage(1);
+    fetchProviders({ page: 1, location: '' });
+  };
 
   const handleToggleWishlist = async (id) => {
     if (!user) {
@@ -182,10 +229,11 @@ export function SearchPage() {
     setSearchTerm('');
     setSelectedCategory('All Categories');
     setMinRating(0);
-    setLocation('');
+    const defaultLoc = user?.location || '';
+    setLocation(defaultLoc);
     setPage(1);
     setSearchParams({});
-    fetchProviders({ page: 1, searchTerm: '', category: '', minRating: 0, location: '' });
+    fetchProviders({ page: 1, searchTerm: '', category: 'All Categories', minRating: 0, location: defaultLoc });
   };
 
   return (
@@ -234,7 +282,7 @@ export function SearchPage() {
 
       {/* Filters Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             variant="outline"
             size="sm"
@@ -245,8 +293,36 @@ export function SearchPage() {
             {showFilters && <X className="h-4 w-4" />}
           </Button>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {pagination.total} providers found
+            {pagination.total} provider{pagination.total === 1 ? '' : 's'} found
           </p>
+
+          {/* Active location status & quick toggles */}
+          {location ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 text-xs font-medium">
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              {user?.location && location.trim().toLowerCase() === user.location.trim().toLowerCase() ? (
+                <span>Location: <strong>{location}</strong> (Saved)</span>
+              ) : (
+                <span>City: <strong>{location}</strong></span>
+              )}
+              <button
+                onClick={handleClearLocation}
+                title="Clear location filter"
+                className="ml-1 hover:text-primary-900 dark:hover:text-primary-100 focus:outline-none"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ) : (
+            user?.location && (
+              <button
+                onClick={handleUseSavedLocation}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-primary-50 dark:hover:bg-primary-900/30 text-gray-600 dark:text-gray-300 hover:text-primary-600 text-xs font-medium transition-colors"
+              >
+                <MapPin className="h-3.5 w-3.5" /> Use My Location ({user.location})
+              </button>
+            )
+          )}
         </div>
         <div className="w-full sm:w-64">
           <Select
@@ -300,17 +376,41 @@ export function SearchPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-ink-light dark:text-ink-dark mb-2">
-                    Location
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-ink-light dark:text-ink-dark">
+                      Location / City
+                    </label>
+                    <div className="flex items-center gap-2 text-xs">
+                      {user?.location && (
+                        <button
+                          type="button"
+                          onClick={handleUseSavedLocation}
+                          className="text-primary-600 hover:underline font-medium"
+                        >
+                          My Location
+                        </button>
+                      )}
+                      {location && (
+                        <button
+                          type="button"
+                          onClick={handleClearLocation}
+                          className="text-gray-500 hover:underline"
+                        >
+                          All Locations
+                        </button>
+                      )}
+                    </div>
+                  </div>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
-                      placeholder="Enter your city"
+                      placeholder="Enter city or area (e.g. Kolkata)"
                       value={location}
                       onChange={(e) => {
-                        setLocation(e.target.value);
+                        const val = e.target.value;
+                        setLocation(val);
                         setPage(1);
+                        fetchProviders({ page: 1, location: val });
                       }}
                       className="pl-10"
                     />

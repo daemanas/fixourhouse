@@ -41,7 +41,7 @@ export function ProfilePage() {
         name: authUser.name || '',
         email: authUser.email || '',
         phone: authUser.phone || '',
-        location: authUser.address || authUser.location || '',
+        location: authUser.location || authUser.address || '',
       });
     }
     setLoading(false);
@@ -60,6 +60,15 @@ export function ProfilePage() {
         email: formData.email,
         location: formData.location,
       });
+      const updatedUser = response?.data?.data?.user;
+      if (updatedUser) {
+        setFormData({
+          name: updatedUser.name || '',
+          email: updatedUser.email || '',
+          phone: updatedUser.phone || '',
+          location: updatedUser.location || '',
+        });
+      }
       toast.success(response?.data?.message || 'Profile updated successfully');
       await refreshUser();
     } catch (error) {
@@ -183,7 +192,7 @@ export function ProfilePage() {
                   <Mail className="h-4 w-4" /> {user.email}
                 </p>
                 <p className="flex items-center justify-center gap-2">
-                  <MapPin className="h-4 w-4" /> {formData.location || user.address || 'Not set'}
+                  <MapPin className="h-4 w-4" /> {user.location || formData.location || user.address || 'Not set'}
                 </p>
                 <p className="flex items-center justify-center gap-2">
                   <Calendar className="h-4 w-4" /> Member since {formatMemberSince()}

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
-export function Modal({ isOpen, onClose, title, subtitle, children, size = 'md' }) {
+export function Modal({ isOpen, onClose, title, subtitle, children, size = 'md', footer, className = '' }) {
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape') onClose();
@@ -40,10 +40,10 @@ export function Modal({ isOpen, onClose, title, subtitle, children, size = 'md' 
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 20 }}
             transition={{ duration: 0.2 }}
-            className={`w-full ${sizes[size]} bg-white dark:bg-gray-900 rounded-2xl shadow-hover border border-border-light dark:border-border-dark`}
+            className={`w-full ${sizes[size]} max-h-[90vh] sm:max-h-[calc(100vh-32px)] flex flex-col bg-white dark:bg-gray-900 rounded-2xl shadow-hover border border-border-light dark:border-border-dark overflow-hidden ${className}`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between p-6 pb-4">
+            <div className="flex items-start justify-between p-6 pb-4 flex-shrink-0 border-b border-gray-100 dark:border-gray-800">
               <div>
                 {title && <h2 className="text-xl font-semibold text-ink-light dark:text-ink-dark">{title}</h2>}
                 {subtitle && <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>}
@@ -56,7 +56,12 @@ export function Modal({ isOpen, onClose, title, subtitle, children, size = 'md' 
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="px-6 pb-6">{children}</div>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6">{children}</div>
+            {footer && (
+              <div className="flex-shrink-0 p-4 sm:p-6 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900">
+                {footer}
+              </div>
+            )}
           </motion.div>
         </motion.div>
       )}
