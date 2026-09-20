@@ -59,7 +59,7 @@ export function OtpPage() {
   const redirectAfterVerify = (role) => {
     switch (role) {
       case 'admin':
-        navigate('/admin/dashboard', { replace: true });
+        navigate('/admin/analytics', { replace: true });
         break;
       case 'provider':
         navigate('/provider/dashboard', { replace: true });

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Search,
@@ -8,6 +8,7 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -64,6 +65,104 @@ const formatDate = (value) => {
     return '—';
   }
 };
+
+const getCustomerId = (complaint) => {
+  if (!complaint) return null;
+  const cust = complaint.customer;
+  if (cust) {
+    if (typeof cust === 'object' && cust._id) return String(cust._id);
+    if (typeof cust === 'string' && cust.trim() && cust !== '[object Object]') return cust;
+  }
+  const bookingCust = complaint.booking?.customerId;
+  if (bookingCust) {
+    if (typeof bookingCust === 'object' && bookingCust._id) return String(bookingCust._id);
+    if (typeof bookingCust === 'string' && bookingCust.trim() && bookingCust !== '[object Object]') return bookingCust;
+  }
+  return null;
+};
+
+const getProviderId = (complaint) => {
+  if (!complaint) return null;
+  const prov = complaint.provider;
+  if (prov) {
+    if (typeof prov === 'object' && prov._id) return String(prov._id);
+    if (typeof prov === 'string' && prov.trim() && prov !== '[object Object]') return prov;
+  }
+  const bookingProv = complaint.booking?.providerId;
+  if (bookingProv) {
+    if (typeof bookingProv === 'object' && bookingProv._id) return String(bookingProv._id);
+    if (typeof bookingProv === 'string' && bookingProv.trim() && bookingProv !== '[object Object]') return bookingProv;
+  }
+  return null;
+};
+
+const getCustomerName = (complaint) => {
+  if (!complaint) return '—';
+  if (typeof complaint.customer === 'object' && complaint.customer?.name) {
+    return complaint.customer.name;
+  }
+  if (typeof complaint.booking?.customerId === 'object' && complaint.booking.customerId?.name) {
+    return complaint.booking.customerId.name;
+  }
+  return '—';
+};
+
+const getProviderName = (complaint) => {
+  if (!complaint) return '—';
+  const prov = complaint.provider;
+  if (typeof prov === 'object' && prov) {
+    if (prov.businessName) return prov.businessName;
+    if (prov.userId?.name) return prov.userId.name;
+  }
+  const bookingProv = complaint.booking?.providerId;
+  if (typeof bookingProv === 'object' && bookingProv) {
+    if (bookingProv.businessName) return bookingProv.businessName;
+    if (bookingProv.userId?.name) return bookingProv.userId.name;
+  }
+  return '—';
+};
+
+function CustomerLink({ complaint }) {
+  const customerId = getCustomerId(complaint);
+  const name = getCustomerName(complaint);
+
+  if (!customerId || name === '—') {
+    return <span className="text-ink-light dark:text-ink-dark">{name}</span>;
+  }
+
+  return (
+    <Link
+      to={`/admin/customers/${customerId}`}
+      className="group inline-flex items-center gap-1 font-medium text-primary hover:text-primary-600 dark:hover:text-primary-400 hover:underline focus:outline-none focus:ring-2 focus:ring-primary/50 rounded transition-colors"
+      aria-label={`View customer profile for ${name}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span>{name}</span>
+      <ExternalLink className="h-3.5 w-3.5 opacity-70 group-hover:opacity-100 transition-opacity" />
+    </Link>
+  );
+}
+
+function ProviderLink({ complaint }) {
+  const providerId = getProviderId(complaint);
+  const name = getProviderName(complaint);
+
+  if (!providerId || name === '—') {
+    return <span className="text-ink-light dark:text-ink-dark">{name}</span>;
+  }
+
+  return (
+    <Link
+      to={`/admin/providers/${providerId}`}
+      className="group inline-flex items-center gap-1 font-medium text-primary hover:text-primary-600 dark:hover:text-primary-400 hover:underline focus:outline-none focus:ring-2 focus:ring-primary/50 rounded transition-colors"
+      aria-label={`View provider profile for ${name}`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span>{name}</span>
+      <ExternalLink className="h-3.5 w-3.5 opacity-70 group-hover:opacity-100 transition-opacity" />
+    </Link>
+  );
+}
 
 const StatCard = ({ label, value, icon: Icon, accent }) => (
   <Card className="p-5">
@@ -148,21 +247,8 @@ export function AdminComplaintsPage() {
       label: 'Category',
       render: (row) => <Badge variant="secondary">{row.category}</Badge>,
     },
-    { key: 'customer', label: 'Customer', render: (row) => row.customer?.name || '—' },
-    // Provider is stored as an ObjectId ref to the Provider model, whose display
-    // name lives in `businessName` (with a nested `userId.name` fallback). Old
-    // complaints whose provider ref is missing must still resolve via the linked
-    // booking (booking.providerId), so we fall back to that as well.
-    {
-      key: 'provider',
-      label: 'Provider',
-      render: (row) =>
-        row.provider?.businessName ||
-        row.provider?.userId?.name ||
-        row.booking?.providerId?.businessName ||
-        row.booking?.providerId?.userId?.name ||
-        '—',
-    },
+    { key: 'customer', label: 'Customer', render: (row) => <CustomerLink complaint={row} /> },
+    { key: 'provider', label: 'Provider', render: (row) => <ProviderLink complaint={row} /> },
     {
       key: 'priority',
       label: 'Priority',

@@ -47,6 +47,9 @@ const formatLocation = (provider) => {
   if (loc.city && !parts.some((p) => p.toLowerCase() === loc.city.toLowerCase())) {
     parts.push(loc.city);
   }
+  if (loc.district && !parts.some((p) => p.toLowerCase() === loc.district.toLowerCase())) {
+    parts.push(loc.district);
+  }
   if (loc.state && !parts.some((p) => p.toLowerCase() === loc.state.toLowerCase())) {
     parts.push(loc.state);
   }
@@ -64,10 +67,10 @@ export function SearchPage() {
   const [sortBy, setSortBy] = useState('rating');
   const [minRating, setMinRating] = useState(0);
   const [location, setLocation] = useState(
-    () => searchParams.get('location') || user?.location || ''
+    () => searchParams.get('location') || user?.locationData?.city || user?.location || ''
   );
   const [isLocationInitialized, setIsLocationInitialized] = useState(
-    Boolean(searchParams.get('location') || user?.location)
+    Boolean(searchParams.get('location') || user?.locationData?.city || user?.location)
   );
   const [showFilters, setShowFilters] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -83,8 +86,8 @@ export function SearchPage() {
       if (searchParams.get('location')) {
         setLocation(searchParams.get('location'));
         setIsLocationInitialized(true);
-      } else if (user?.location) {
-        setLocation(user.location);
+      } else if (user?.locationData?.city || user?.location) {
+        setLocation(user?.locationData?.city || user?.location);
         setIsLocationInitialized(true);
       }
     }

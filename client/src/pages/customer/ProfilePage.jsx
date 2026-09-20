@@ -20,6 +20,7 @@ import Avatar from '../../components/ui/Avatar';
 import { updateMyProfile } from '../../services/userService';
 import { useAuth } from '../../context/AuthContext';
 import env from '../../config/env';
+import LocationCascade from '../../components/common/LocationCascade';
 
 export function ProfilePage() {
   const { user: authUser, refreshUser } = useAuth();
@@ -30,6 +31,16 @@ export function ProfilePage() {
     email: '',
     phone: '',
     location: '',
+  });
+  const [locationData, setLocationData] = useState({
+    country: 'India',
+    state: '',
+    district: '',
+    city: '',
+    countryId: '',
+    stateId: '',
+    districtId: '',
+    cityId: '',
   });
   const [saving, setSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -43,6 +54,9 @@ export function ProfilePage() {
         phone: authUser.phone || '',
         location: authUser.location || authUser.address || '',
       });
+      if (authUser.locationData) {
+        setLocationData(authUser.locationData);
+      }
     }
     setLoading(false);
   }, [authUser]);
@@ -55,10 +69,16 @@ export function ProfilePage() {
     e.preventDefault();
     setSaving(true);
     try {
+      const formattedLoc =
+        [locationData.city, locationData.district, locationData.state]
+          .filter(Boolean)
+          .join(', ') || formData.location;
+
       const response = await updateMyProfile({
         name: formData.name,
         email: formData.email,
-        location: formData.location,
+        location: formattedLoc,
+        locationData,
       });
       const updatedUser = response?.data?.data?.user;
       if (updatedUser) {
@@ -68,6 +88,9 @@ export function ProfilePage() {
           phone: updatedUser.phone || '',
           location: updatedUser.location || '',
         });
+        if (updatedUser.locationData) {
+          setLocationData(updatedUser.locationData);
+        }
       }
       toast.success(response?.data?.message || 'Profile updated successfully');
       await refreshUser();
@@ -268,16 +291,10 @@ export function ProfilePage() {
                     <label className="block text-sm font-medium text-ink-light dark:text-ink-dark mb-2">
                       Location
                     </label>
-                    <div className="relative">
-                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        name="location"
-                        value={formData.location}
-                        onChange={handleChange}
-                        className="pl-10"
-                        required
-                      />
-                    </div>
+                    <LocationCascade
+                      value={locationData}
+                      onChange={setLocationData}
+                    />
                   </div>
                 </div>
                 <div className="flex justify-end">

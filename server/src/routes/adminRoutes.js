@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   getStats,
+  getAnalytics,
   getUsers,
   getCustomers,
   getCustomerDetail,
@@ -36,6 +37,7 @@ const router = Router();
 router.use(protect, authorize('admin'));
 
 router.get('/stats', getStats);
+router.get('/analytics', getAnalytics);
 router.get('/revenue', getRevenue);
 
 router.get('/users', getUsers);

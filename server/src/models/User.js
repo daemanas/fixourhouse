@@ -48,6 +48,19 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    // Structured location selected from the India cascade (State→District→City).
+    // Stored separately from the legacy `location` plain-text field so old
+    // documents keep working after migration.
+    locationData: {
+      country: { type: String, trim: true, default: 'India' },
+      state: { type: String, trim: true, default: '' },
+      district: { type: String, trim: true, default: '' },
+      city: { type: String, trim: true, default: '' },
+      countryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', default: null },
+      stateId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', default: null },
+      districtId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', default: null },
+      cityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', default: null },
+    },
     warnings: {
       type: Number,
       default: 0,
@@ -65,6 +78,7 @@ const userSchema = new mongoose.Schema(
     resetPasswordToken: String,
     resetPasswordExpires: Date,
     lastLogin: Date,
+    lastActiveAt: Date,
   },
   {
     timestamps: true,

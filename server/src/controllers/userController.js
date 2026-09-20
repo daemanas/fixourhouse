@@ -9,12 +9,13 @@ import { saveBase64Image } from '../utils/upload.js';
 // @route   PATCH /api/v1/users/me
 // @access  Private
 export const updateMyProfile = asyncHandler(async (req, res) => {
-  const { name, email, avatar, location } = req.body;
+  const { name, email, avatar, location, locationData } = req.body;
 
   const updateFields = {};
   if (name) updateFields.name = name;
   if (email !== undefined) updateFields.email = email;
   if (location !== undefined) updateFields.location = location;
+  if (locationData !== undefined) updateFields.locationData = locationData;
   if (avatar !== undefined) {
     // Base64 data URLs are written to disk and stored as a URL (same behaviour
     // as the provider avatar upload); already-resolved URLs pass through.

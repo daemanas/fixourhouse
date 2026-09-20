@@ -11,10 +11,12 @@ import {
   MessageSquare,
   Loader2,
   Phone,
+  Eye,
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
+import Modal from '../../components/ui/Modal';
 import EmptyState from '../../components/ui/EmptyState';
 import Avatar from '../../components/ui/Avatar';
 import { getMyBookings, updateBookingStatus } from '../../services/bookingService';
@@ -33,6 +35,13 @@ export function BookingRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  useEffect(() => {
+    if (selectedBooking) {
+      console.log("BOOKING DETAILS:", selectedBooking);
+    }
+  }, [selectedBooking]);
+
 
   const fetchBookings = useCallback(async () => {
     setLoading(true);
@@ -78,9 +87,7 @@ export function BookingRequestsPage() {
         icon={MessageSquare}
         title="Failed to load requests"
         description={error}
-        action={
-          <Button onClick={fetchBookings}>Try Again</Button>
-        }
+        action={<Button onClick={fetchBookings}>Try Again</Button>}
       />
     );
   }
@@ -103,16 +110,19 @@ export function BookingRequestsPage() {
       ) : (
         <div className="space-y-4">
           {bookings.map((booking, index) => {
-            const customer = booking.customerId;
+            const customer = booking.customerSnapshot || booking.customerId;
             const customerName = customer?.name || 'Customer';
             const customerAvatar = customer?.avatar;
             const customerPhone = customer?.phone;
-            const service = booking.serviceId;
+            const service = booking.serviceSnapshot || booking.serviceId;
+            const address = booking.bookingAddress || booking.address;
+
             const locationStr = [
-              booking.address?.line1,
-              booking.address?.city,
-              booking.address?.state,
+              address?.line1,
+              address?.city,
+              address?.state,
             ].filter(Boolean).join(', ');
+
             const scheduledDate = booking.scheduledDate
               ? new Date(booking.scheduledDate).toLocaleDateString('en-IN', {
                   day: 'numeric',
@@ -145,7 +155,7 @@ export function BookingRequestsPage() {
                           <Badge variant={statusInfo.color}>{statusInfo.label}</Badge>
                         </div>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {service?.name || 'Service'}
+                          {service?.serviceName || service?.name || 'Service'}
                         </p>
                       </div>
                     </div>
@@ -169,30 +179,35 @@ export function BookingRequestsPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <Button
-                        variant="success"
-                        onClick={() => handleStatusUpdate(booking._id, 'accepted')}
-                        disabled={actionLoading === booking._id}
-                      >
-                        {actionLoading === booking._id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Check className="h-4 w-4" />
-                        )}
-                        Accept
-                      </Button>
-                      <Button
-                        variant="danger"
-                        onClick={() => handleStatusUpdate(booking._id, 'rejected')}
-                        disabled={actionLoading === booking._id}
-                      >
-                        {actionLoading === booking._id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <X className="h-4 w-4" />
-                        )}
-                        Reject
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center gap-3">
+                        <Button
+                          variant="success"
+                          onClick={() => handleStatusUpdate(booking._id, 'accepted')}
+                          disabled={actionLoading === booking._id}
+                        >
+                          {actionLoading === booking._id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Check className="h-4 w-4" />
+                          )}
+                          Accept
+                        </Button>
+                        <Button
+                          variant="danger"
+                          onClick={() => handleStatusUpdate(booking._id, 'rejected')}
+                          disabled={actionLoading === booking._id}
+                        >
+                          {actionLoading === booking._id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <X className="h-4 w-4" />
+                          )}
+                          Reject
+                        </Button>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => setSelectedBooking(booking)}>
+                        <Eye className="h-4 w-4 mr-2" /> View Details
                       </Button>
                     </div>
                   </div>
@@ -218,6 +233,104 @@ export function BookingRequestsPage() {
           })}
         </div>
       )}
+
+      {/* Modal rendered outside the map loop */}
+      <Modal
+        isOpen={!!selectedBooking}
+        onClose={() => setSelectedBooking(null)}
+        title="Booking Details"
+        subtitle={`Booking ID: ${selectedBooking?.bookingId || selectedBooking?._id || 'N/A'}`}
+        size="lg"
+      >
+        {selectedBooking && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Service</p>
+                <p className="font-medium text-gray-900 dark:text-white">
+                  {selectedBooking.serviceSnapshot?.serviceName ||
+                    selectedBooking.serviceName ||
+                    selectedBooking.serviceId?.name ||
+                    'N/A'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Amount</p>
+                <p className="font-medium text-gray-900 dark:text-white">₹{selectedBooking.amount ?? 0}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Schedule Date</p>
+                <p className="font-medium text-gray-900 dark:text-white">
+                  {selectedBooking.scheduledDate
+                    ? new Date(selectedBooking.scheduledDate).toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })
+                    : 'N/A'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Schedule Time</p>
+                <p className="font-medium text-gray-900 dark:text-white">{selectedBooking.scheduledTime || 'N/A'}</p>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Service Location</p>
+              <div className="mt-1 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm text-gray-700 dark:text-gray-300">
+                {selectedBooking.bookingAddress || selectedBooking.address ? (
+                  <>
+                    <p>{(selectedBooking.bookingAddress || selectedBooking.address).line1}</p>
+                    {(selectedBooking.bookingAddress || selectedBooking.address).line2 && (
+                      <p>{(selectedBooking.bookingAddress || selectedBooking.address).line2}</p>
+                    )}
+                    <p>
+                      {(selectedBooking.bookingAddress || selectedBooking.address).city},{' '}
+                      {(selectedBooking.bookingAddress || selectedBooking.address).state} -{' '}
+                      {(selectedBooking.bookingAddress || selectedBooking.address).pincode}
+                    </p>
+                  </>
+                ) : (
+                  <p>Address not provided</p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Customer</p>
+              <p className="font-medium text-gray-900 dark:text-white">
+                {selectedBooking.customerSnapshot?.name || selectedBooking.customerId?.name || 'Not provided'}
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                📞 {selectedBooking.customerSnapshot?.phone || selectedBooking.customerId?.phone || 'Not provided'}
+              </p>
+            </div>
+
+            {selectedBooking.notes && (
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Customer Notes</p>
+                <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">{selectedBooking.notes}</p>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-2 gap-4">
+               <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Payment Method</p>
+                <p className="font-medium text-gray-900 dark:text-white capitalize">{selectedBooking.paymentMethod || selectedBooking.payment?.method || 'N/A'}</p>
+               </div>
+               <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Payment Status</p>
+                <p className="font-medium text-gray-900 dark:text-white capitalize">{selectedBooking.payment?.status || 'N/A'}</p>
+               </div>
+               <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Booking Status</p>
+                <p className="font-medium text-gray-900 dark:text-white capitalize">{selectedBooking.status || 'N/A'}</p>
+               </div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

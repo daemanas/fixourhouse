@@ -42,6 +42,10 @@ export const getProviders = asyncHandler(async (req, res) => {
 
   if (req.query.category) filter.category = req.query.category;
   if (req.query.minRating) filter.rating = { $gte: parseFloat(req.query.minRating) };
+  if (req.query.countryId) filter['location.countryId'] = req.query.countryId;
+  if (req.query.stateId) filter['location.stateId'] = req.query.stateId;
+  if (req.query.districtId) filter['location.districtId'] = req.query.districtId;
+  if (req.query.cityId) filter['location.cityId'] = req.query.cityId;
 
   const andConditions = [];
 

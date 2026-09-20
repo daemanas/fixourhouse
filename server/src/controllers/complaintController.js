@@ -402,7 +402,18 @@ export const getComplaints = asyncHandler(async (req, res) => {
         populate: { path: 'userId', select: 'name phone email avatar' },
       })
       .populate('service', 'name price description')
-      .populate('booking', 'bookingId status amount'),
+      .populate({
+        path: 'booking',
+        select: 'bookingId status amount customerId providerId',
+        populate: [
+          { path: 'customerId', select: 'name phone email avatar' },
+          {
+            path: 'providerId',
+            select: 'businessName category location userId',
+            populate: { path: 'userId', select: 'name phone email avatar' },
+          },
+        ],
+      }),
     Complaint.countDocuments(filter),
   ]);
 

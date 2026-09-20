@@ -25,6 +25,7 @@ import { getCategories } from '../../services/categoryService';
 import { useAuth } from '../../context/AuthContext';
 import env from '../../config/env';
 import Avatar from '../../components/ui/Avatar';
+import LocationCascade from '../../components/common/LocationCascade';
 import {
   normalizeAvailability,
   summarizeAvailability,
@@ -47,6 +48,14 @@ export function ProviderProfilePage() {
     basePrice: '',
     phone: '',
     email: '',
+  });
+  const [locationData, setLocationData] = useState({
+    state: '',
+    district: '',
+    city: '',
+    stateId: '',
+    districtId: '',
+    cityId: '',
   });
   // Availability is read from the backend (GET /providers/me/profile and
   // GET /providers/me/availability) — it is never edited on this page. The
@@ -95,6 +104,11 @@ export function ProviderProfilePage() {
       basePrice: provider.pricing?.basePrice != null ? String(provider.pricing.basePrice) : '',
       phone: provider.userId?.phone || authUser?.phone || '',
       email: provider.userId?.email || authUser?.email || '',
+    });
+    setLocationData({
+      state: provider.location?.state || '',
+      district: provider.location?.district || '',
+      city: provider.location?.city || '',
     });
     setAvailability(normalizeAvailability(provider.availability));
     setAvatarUrl(provider.userId?.avatar || authUser?.avatar || '');
@@ -177,13 +191,16 @@ export function ProviderProfilePage() {
     setSaving(true);
     try {
       const payload = {
-        businessName: form.businessName.trim(),
-        description: form.description.trim() || undefined,
-        category: form.category.trim(),
-        experience: form.experience !== '' ? Number(form.experience) : undefined,
         location: {
-          city: form.city.trim(),
+          country: locationData.country || 'India',
+          state: locationData.state || undefined,
+          district: locationData.district || undefined,
+          city: locationData.city || form.city.trim(),
           address: form.area.trim(),
+          countryId: locationData.countryId || undefined,
+          stateId: locationData.stateId || undefined,
+          districtId: locationData.districtId || undefined,
+          cityId: locationData.cityId || undefined,
         },
         pricing: {
           basePrice: form.basePrice !== '' ? Number(form.basePrice) : undefined,
@@ -467,21 +484,27 @@ export function ProviderProfilePage() {
                 disabled
               />
               <Input
-                label="Email"
+                label="Email Address"
                 name="email"
                 type="email"
                 value={form.email}
                 onChange={handleChange}
                 error={errors.email}
               />
-              <Input
-                label="City"
-                name="city"
-                value={form.city}
-                onChange={handleChange}
-                error={errors.city}
-                required
-              />
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-ink-light dark:text-ink-dark mb-2">
+                  Business Location (State, District, City)
+                </label>
+                <LocationCascade
+                  value={locationData}
+                  onChange={(val) => {
+                    setLocationData(val);
+                    if (val.city) {
+                      setForm((prev) => ({ ...prev, city: val.city }));
+                    }
+                  }}
+                />
+              </div>
               <Input
                 label="Service Area"
                 name="area"

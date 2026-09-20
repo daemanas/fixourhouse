@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+﻿import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Provider from '../models/Provider.js';
 import Booking from '../models/Booking.js';
@@ -14,7 +14,7 @@ import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
 
-// Platform fee rate — MUST match bookingController.updateBookingStatus and
+// Platform fee rate â€” MUST match bookingController.updateBookingStatus and
 // utils/earnings.js. The recorded Payment.commission is the source of truth;
 // fall back to booking.commission, then to the configured rate for legacy docs
 // that predate Payment records.
@@ -219,7 +219,7 @@ export const getProviders = asyncHandler(async (req, res) => {
   if (req.query.verificationStatus) filter.verificationStatus = req.query.verificationStatus;
   if (req.query.category) filter.category = req.query.category;
 
-  // Account status filter — maps to the User.status field
+  // Account status filter â€” maps to the User.status field
   // We handle this separately after finding matching userIds.
   let userStatusFilter = null;
   if (req.query.accountStatus) {
@@ -355,7 +355,7 @@ export const getProviders = asyncHandler(async (req, res) => {
     };
   });
 
-  // Rating distribution summary — use the base filter (without the applied rating filter)
+  // Rating distribution summary â€” use the base filter (without the applied rating filter)
   // so filter buttons show counts for the full matching set, not just the current rating slice.
   const distributionFilter = { ...filter };
   delete distributionFilter.rating;
@@ -599,7 +599,7 @@ export const getBookings = asyncHandler(async (req, res) => {
       filter.$or = searchClauses;
     }
   } else if (bookingIdsByPayment) {
-    // Only a refunded filter, no search text — already set filter._id above.
+    // Only a refunded filter, no search text â€” already set filter._id above.
     filter._id = { $in: bookingIdsByPayment };
   }
 
@@ -710,7 +710,7 @@ export const getBookingDetail = asyncHandler(async (req, res) => {
   const jobAmount = Math.max(0, safeNum(bookingObj.amount));
 
   // Service category: prefer the Service's own categoryId link, else provider's
-  // main category — the same single source of truth used across admin pages.
+  // main category â€” the same single source of truth used across admin pages.
   let serviceCategory = booking.providerId?.category || null;
   if (booking.serviceId?.categoryId) {
     await booking.populate('serviceId.categoryId', 'name');
@@ -1134,5 +1134,473 @@ export const updateCustomerStatus = asyncHandler(async (req, res) => {
 
   res.status(200).json(
     new ApiResponse(200, { user }, 'Customer status updated successfully')
+  );
+});
+
+
+// @desc    Get platform analytics overview
+// @route   GET /api/v1/admin/analytics
+// @access  Private (Admin)
+export const getAnalytics = asyncHandler(async (req, res) => {
+  const { period = '30d', startDate, endDate } = req.query;
+
+  const now = new Date();
+  let start;
+  let end = new Date(now);
+
+  if (period === 'today') {
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  } else if (period === '7d') {
+    start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  } else if (period === '30d') {
+    start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  } else if (period === 'this_month') {
+    start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+  } else if (period === 'last_month') {
+    start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+    end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+  } else if (period === 'this_year') {
+    start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+  } else if (period === 'custom' && startDate && endDate) {
+    start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+  } else {
+    start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  }
+
+  const duration = Math.max(1, end.getTime() - start.getTime());
+  const prevStart = new Date(start.getTime() - duration);
+  const prevEnd = new Date(start.getTime() - 1);
+
+  // 1. Core KPIs Counts
+  const [
+    totalCustomers,
+    totalProviders,
+    totalBookings,
+    completedBookingsAllTime,
+    currCustReg,
+    prevCustReg,
+    currProvReg,
+    prevProvReg,
+    currBookingsCount,
+    prevBookingsCount,
+  ] = await Promise.all([
+    User.countDocuments({ role: 'customer' }),
+    Provider.countDocuments(),
+    Booking.countDocuments(),
+    Booking.countDocuments({ status: 'completed' }),
+    User.countDocuments({ role: 'customer', createdAt: { $gte: start, $lte: end } }),
+    User.countDocuments({ role: 'customer', createdAt: { $gte: prevStart, $lte: prevEnd } }),
+    Provider.countDocuments({ createdAt: { $gte: start, $lte: end } }),
+    Provider.countDocuments({ createdAt: { $gte: prevStart, $lte: prevEnd } }),
+    Booking.countDocuments({ createdAt: { $gte: start, $lte: end } }),
+    Booking.countDocuments({ createdAt: { $gte: prevStart, $lte: prevEnd } }),
+  ]);
+
+  // 2. Active Customers
+  const [activeCustUsers, activeCustBookings, activeCustReviews, activeCustComplaints] = await Promise.all([
+    User.find({
+      role: 'customer',
+      $or: [{ lastActiveAt: { $gte: start, $lte: end } }, { lastLogin: { $gte: start, $lte: end } }],
+    }).distinct('_id'),
+    Booking.find({ createdAt: { $gte: start, $lte: end } }).distinct('customerId'),
+    Review.find({ createdAt: { $gte: start, $lte: end } }).distinct('customerId'),
+    Complaint.find({ createdAt: { $gte: start, $lte: end } }).distinct('reporterId'),
+  ]);
+
+  const activeCustSet = new Set([
+    ...activeCustUsers.map((id) => String(id)),
+    ...activeCustBookings.map((id) => String(id)),
+    ...activeCustReviews.map((id) => String(id)),
+    ...activeCustComplaints.map((id) => String(id)),
+  ]);
+  const activeCustomers = activeCustSet.size;
+  const activeCustomersPercentage = totalCustomers > 0
+    ? Number(((activeCustomers / totalCustomers) * 100).toFixed(1))
+    : 0;
+
+  // 3. Active Providers
+  const [activeProvUsers, activeProvBookings, activeProvDocs] = await Promise.all([
+    User.find({
+      role: 'provider',
+      $or: [{ lastActiveAt: { $gte: start, $lte: end } }, { lastLogin: { $gte: start, $lte: end } }],
+    }).distinct('_id'),
+    Booking.find({
+      $or: [
+        { createdAt: { $gte: start, $lte: end } },
+        { completedAt: { $gte: start, $lte: end } },
+        { 'timeline.timestamp': { $gte: start, $lte: end } },
+      ],
+    }).distinct('providerId'),
+    Provider.find({ updatedAt: { $gte: start, $lte: end } }).distinct('_id'),
+  ]);
+
+  const provsForUsers = await Provider.find({ userId: { $in: activeProvUsers } }).distinct('_id');
+  const activeProvSet = new Set([
+    ...provsForUsers.map((id) => String(id)),
+    ...activeProvBookings.map((id) => String(id)),
+    ...activeProvDocs.map((id) => String(id)),
+  ]);
+  const activeProviders = activeProvSet.size;
+  const activeProvidersPercentage = totalProviders > 0
+    ? Number(((activeProviders / totalProviders) * 100).toFixed(1))
+    : 0;
+
+  // 4. Booking Overview by Status
+  const bookingStatusesRaw = await Booking.aggregate([
+    { $group: { _id: '$status', count: { $sum: 1 } } },
+  ]);
+
+  const bookingCounts = {
+    pending: 0,
+    accepted: 0,
+    working: 0,
+    completed: 0,
+    cancelled: 0,
+    rejected: 0,
+  };
+  bookingStatusesRaw.forEach((item) => {
+    if (item._id in bookingCounts) {
+      bookingCounts[item._id] = item.count;
+    }
+  });
+
+  const refundedCount = await Booking.countDocuments({
+    $or: [{ status: 'rejected' }, { 'payment.status': 'refunded' }],
+  });
+
+  const completionRate = totalBookings > 0
+    ? Number(((bookingCounts.completed / totalBookings) * 100).toFixed(1))
+    : 0;
+
+  // 5. Location Analytics & Top Locations
+  const normalizeLoc = (str) => {
+    if (!str || typeof str !== 'string') return '';
+    const cleaned = str.trim();
+    if (!cleaned) return '';
+    return cleaned
+      .split(/\s+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+  const citiesSet = new Set();
+  const districtsSet = new Set();
+  const locationStatsMap = new Map();
+
+  const getLocEntry = (name) => {
+    const key = name.toLowerCase();
+    if (!locationStatsMap.has(key)) {
+      locationStatsMap.set(key, {
+        name,
+        customers: 0,
+        providers: 0,
+        bookings: 0,
+        completedBookings: 0,
+      });
+    }
+    return locationStatsMap.get(key);
+  };
+
+  // User locations
+  const usersWithLoc = await User.find({ location: { $exists: true, $ne: '' } }).select('location role');
+  usersWithLoc.forEach((u) => {
+    const norm = normalizeLoc(u.location);
+    if (norm) {
+      citiesSet.add(norm);
+      if (u.role === 'customer') {
+        const entry = getLocEntry(norm);
+        entry.customers += 1;
+      }
+    }
+  });
+
+  // Provider locations & service areas
+  const providersWithLoc = await Provider.find().select('location serviceArea');
+  providersWithLoc.forEach((p) => {
+    const city = normalizeLoc(p.location?.city);
+    const district = normalizeLoc(p.location?.district);
+    if (city) {
+      citiesSet.add(city);
+      const entry = getLocEntry(city);
+      entry.providers += 1;
+    }
+    if (district) {
+      districtsSet.add(district);
+    }
+    if (Array.isArray(p.serviceArea)) {
+      p.serviceArea.forEach((sa) => {
+        const normSa = normalizeLoc(sa);
+        if (normSa) citiesSet.add(normSa);
+      });
+    }
+  });
+
+  // Booking locations
+  const bookingsWithLoc = await Booking.find().select('address status');
+  bookingsWithLoc.forEach((b) => {
+    const city = normalizeLoc(b.address?.city);
+    if (city) {
+      citiesSet.add(city);
+      const entry = getLocEntry(city);
+      entry.bookings += 1;
+      if (b.status === 'completed') {
+        entry.completedBookings += 1;
+      }
+    }
+  });
+
+  const locationList = Array.from(locationStatsMap.values())
+    .sort((a, b) => b.bookings * 3 + b.providers * 2 + b.customers - (a.bookings * 3 + a.providers * 2 + a.customers));
+
+  const topLocations = locationList.slice(0, 10).map((item, idx) => ({
+    rank: idx + 1,
+    name: item.name,
+    customers: item.customers,
+    providers: item.providers,
+    bookings: item.bookings,
+    completedBookings: item.completedBookings,
+  }));
+
+  // 6. Platform Rating & Distribution
+  const ratingAgg = await Review.aggregate([
+    {
+      $group: {
+        _id: null,
+        avgRating: { $avg: '$rating' },
+        totalReviews: { $sum: 1 },
+        r5: { $sum: { $cond: [{ $eq: ['$rating', 5] }, 1, 0] } },
+        r4: { $sum: { $cond: [{ $eq: ['$rating', 4] }, 1, 0] } },
+        r3: { $sum: { $cond: [{ $eq: ['$rating', 3] }, 1, 0] } },
+        r2: { $sum: { $cond: [{ $eq: ['$rating', 2] }, 1, 0] } },
+        r1: { $sum: { $cond: [{ $eq: ['$rating', 1] }, 1, 0] } },
+      },
+    },
+  ]);
+
+  const ratingInfo = ratingAgg[0]
+    ? {
+        average: Number(ratingAgg[0].avgRating.toFixed(1)),
+        totalReviews: ratingAgg[0].totalReviews,
+        distribution: {
+          5: ratingAgg[0].r5,
+          4: ratingAgg[0].r4,
+          3: ratingAgg[0].r3,
+          2: ratingAgg[0].r2,
+          1: ratingAgg[0].r1,
+        },
+      }
+    : {
+        average: 0,
+        totalReviews: 0,
+        distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+      };
+
+  // 7. User & Booking Growth Percentages
+  const custGrowthPercent = prevCustReg > 0
+    ? Number((((currCustReg - prevCustReg) / prevCustReg) * 100).toFixed(1))
+    : null;
+  const provGrowthPercent = prevProvReg > 0
+    ? Number((((currProvReg - prevProvReg) / prevProvReg) * 100).toFixed(1))
+    : null;
+  const bookingGrowthPercent = prevBookingsCount > 0
+    ? Number((((currBookingsCount - prevBookingsCount) / prevBookingsCount) * 100).toFixed(1))
+    : null;
+
+  // 8. Monthly Trend Data (Last 12 Months)
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthlyData = [];
+
+  // The booking trends window always covers the last 12 calendar months regardless
+  // of which analytics period filter the user selected.
+  const trendWindowStart = new Date(now.getFullYear(), now.getMonth() - 11, 1, 0, 0, 0, 0);
+  const trendWindowEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  // Total bookings per month (bucketed by createdAt)
+  const bookingTotalsAgg = await Booking.aggregate([
+    { $match: { createdAt: { $gte: trendWindowStart, $lte: trendWindowEnd } } },
+    {
+      $group: {
+        _id: { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } },
+        total: { $sum: 1 },
+      },
+    },
+  ]);
+
+  // Completed bookings per month.
+  // Fall back to updatedAt for legacy bookings without a completedAt timestamp.
+  const bookingCompletedAgg = await Booking.aggregate([
+    { $match: { status: 'completed' } },
+    {
+      $project: {
+        effectiveCompletedAt: { $ifNull: ['$completedAt', '$updatedAt'] },
+      },
+    },
+    { $match: { effectiveCompletedAt: { $gte: trendWindowStart, $lte: trendWindowEnd } } },
+    {
+      $group: {
+        _id: { year: { $year: '$effectiveCompletedAt' }, month: { $month: '$effectiveCompletedAt' } },
+        completed: { $sum: 1 },
+      },
+    },
+  ]);
+
+  // Lookup maps keyed by "YYYY-M" (un-padded month matches MongoDB $month output)
+  const bookingTotalsMap = new Map(
+    bookingTotalsAgg.map((item) => [`${item._id.year}-${item._id.month}`, item.total])
+  );
+  const bookingCompletedMap = new Map(
+    bookingCompletedAgg.map((item) => [`${item._id.year}-${item._id.month}`, item.completed])
+  );
+
+  for (let i = 11; i >= 0; i--) {
+    const mDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const mStart = new Date(mDate.getFullYear(), mDate.getMonth(), 1, 0, 0, 0, 0);
+    const mEnd = new Date(mDate.getFullYear(), mDate.getMonth() + 1, 0, 23, 59, 59, 999);
+    const monthLabel = monthNames[mStart.getMonth()];
+    // Map key uses un-padded month number to match the $month operator output
+    const mapKey = `${mStart.getFullYear()}-${mStart.getMonth() + 1}`;
+
+    const [mCustReg, mProvReg, mActiveCust, mActiveProv] = await Promise.all([
+      User.countDocuments({ role: 'customer', createdAt: { $gte: mStart, $lte: mEnd } }),
+      Provider.countDocuments({ createdAt: { $gte: mStart, $lte: mEnd } }),
+      User.find({
+        role: 'customer',
+        $or: [{ lastActiveAt: { $gte: mStart, $lte: mEnd } }, { lastLogin: { $gte: mStart, $lte: mEnd } }],
+      }).distinct('_id').then((ids) => ids.length),
+      User.find({
+        role: 'provider',
+        $or: [{ lastActiveAt: { $gte: mStart, $lte: mEnd } }, { lastLogin: { $gte: mStart, $lte: mEnd } }],
+      }).distinct('_id').then((ids) => ids.length),
+    ]);
+
+    const mBookingsTotal = bookingTotalsMap.get(mapKey) || 0;
+    const mBookingsCompleted = bookingCompletedMap.get(mapKey) || 0;
+
+    monthlyData.push({
+      month: monthLabel,
+      year: mStart.getFullYear(),
+      monthKey: `${mStart.getFullYear()}-${String(mStart.getMonth() + 1).padStart(2, '0')}`,
+      customersRegistered: mCustReg,
+      providersRegistered: mProvReg,
+      activeCustomers: mActiveCust,
+      activeProviders: mActiveProv,
+      bookings: mBookingsTotal,
+      completedBookings: mBookingsCompleted,
+    });
+  }
+
+  // 9. Recent Activity Feed (Real DB events)
+  const [recentCustomers, recentProviders, recentCompletedBookings, recentReviews] = await Promise.all([
+    User.find({ role: 'customer' }).sort({ createdAt: -1 }).limit(4).select('name createdAt'),
+    Provider.find().sort({ createdAt: -1 }).limit(4).select('businessName createdAt'),
+    Booking.find({ status: 'completed' })
+      .populate('customerId', 'name')
+      .populate('providerId', 'businessName')
+      .sort({ completedAt: -1, updatedAt: -1 })
+      .limit(4),
+    Review.find()
+      .populate('customerId', 'name')
+      .populate('providerId', 'businessName')
+      .sort({ createdAt: -1 })
+      .limit(4),
+  ]);
+
+  const activities = [];
+
+  recentCustomers.forEach((c) => {
+    activities.push({
+      id: `cust_${c._id}`,
+      type: 'customer_registered',
+      title: 'New customer registered',
+      actor: c.name || 'Customer',
+      timestamp: c.createdAt,
+    });
+  });
+
+  recentProviders.forEach((p) => {
+    activities.push({
+      id: `prov_${p._id}`,
+      type: 'provider_registered',
+      title: 'New provider registered',
+      actor: p.businessName || 'Provider',
+      timestamp: p.createdAt,
+    });
+  });
+
+  recentCompletedBookings.forEach((b) => {
+    activities.push({
+      id: `book_${b._id}`,
+      type: 'booking_completed',
+      title: `Booking #${b.bookingId || String(b._id).slice(-6)} completed`,
+      actor: b.customerId?.name ? `${b.customerId.name} with ${b.providerId?.businessName || 'Provider'}` : 'Customer & Provider',
+      timestamp: b.completedAt || b.updatedAt,
+    });
+  });
+
+  recentReviews.forEach((r) => {
+    activities.push({
+      id: `rev_${r._id}`,
+      type: 'review_submitted',
+      title: `â­ ${r.rating} star review submitted`,
+      actor: r.customerId?.name ? `${r.customerId.name} for ${r.providerId?.businessName || 'Provider'}` : 'Customer',
+      timestamp: r.createdAt,
+    });
+  });
+
+  activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const recentActivity = activities.slice(0, 8);
+
+  res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        period,
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        kpis: {
+          totalCustomers,
+          activeCustomers,
+          activeCustomersPercentage,
+          totalProviders,
+          activeProviders,
+          activeProvidersPercentage,
+          totalBookings,
+          completedBookings: bookingCounts.completed,
+          completionRate,
+          totalCities: citiesSet.size,
+          totalDistricts: districtsSet.size,
+          platformRating: ratingInfo.average,
+          totalReviews: ratingInfo.totalReviews,
+        },
+        bookingOverview: {
+          total: totalBookings,
+          periodTotal: currBookingsCount,
+          completed: bookingCounts.completed,
+          pending: bookingCounts.pending,
+          accepted: bookingCounts.accepted,
+          inProgress: bookingCounts.working,
+          cancelled: bookingCounts.cancelled,
+          refunded: refundedCount,
+        },
+        ratingOverview: ratingInfo,
+        locations: {
+          totalCities: citiesSet.size,
+          totalDistricts: districtsSet.size,
+          topLocations,
+        },
+        userGrowth: {
+          customerGrowthPercent: custGrowthPercent,
+          providerGrowthPercent: provGrowthPercent,
+          bookingGrowthPercent,
+        },
+        monthlyData,
+        recentActivity,
+      },
+      'Platform analytics fetched successfully'
+    )
   );
 });

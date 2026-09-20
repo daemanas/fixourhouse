@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 const items = [
-  { to: '/admin/dashboard', label: 'Analytics', icon: LayoutDashboard },
+  { to: '/admin/analytics', label: 'Analytics', icon: LayoutDashboard },
   { to: '/admin/customers', label: 'Customers', icon: Users },
   { to: '/admin/providers', label: 'Providers', icon: HardHat },
   { to: '/admin/bookings', label: 'Bookings', icon: CalendarCheck },

@@ -115,10 +115,15 @@ const providerSchema = new mongoose.Schema(
     },
     location: {
       address: String,
-      city: String,
-      district: String,
+      country: String,
       state: String,
+      district: String,
+      city: String,
       pincode: String,
+      countryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', default: null },
+      stateId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', default: null },
+      districtId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', default: null },
+      cityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', default: null },
       coordinates: {
         type: { type: String, enum: ['Point'], default: 'Point' },
         coordinates: { type: [Number], default: [0, 0] },

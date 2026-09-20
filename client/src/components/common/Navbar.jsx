@@ -21,7 +21,7 @@ export function Navbar() {
   }, []);
 
   const getDashboardPath = () => {
-    if (user?.role === 'admin') return '/admin/dashboard';
+    if (user?.role === 'admin') return '/admin/analytics';
     if (user?.role === 'provider') return '/provider/dashboard';
     return '/customer/dashboard';
   };

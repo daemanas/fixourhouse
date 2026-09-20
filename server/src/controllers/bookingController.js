@@ -63,6 +63,20 @@ export const createBooking = asyncHandler(async (req, res) => {
     customerId: req.user._id,
     providerId,
     serviceId,
+    serviceSnapshot: {
+      serviceId,
+      serviceName,
+      description: service.description,
+      price: servicePrice,
+    },
+    customerSnapshot: {
+      name: req.user.name,
+      phone: req.user.phone,
+    },
+    bookingAddress: {
+      ...address,
+      country: address.country || 'India',
+    },
     serviceName,
     amount: servicePrice,
     status: 'pending',

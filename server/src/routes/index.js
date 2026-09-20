@@ -12,6 +12,7 @@ import adminRoutes from './adminRoutes.js';
 import complaintRoutes from './complaintRoutes.js';
 import withdrawalRoutes from './withdrawalRoutes.js';
 import galleryRoutes from './galleryRoutes.js';
+import locationRoutes from './locationRoutes.js';
 
 const router = Router();
 
@@ -28,5 +29,6 @@ router.use('/withdrawals', withdrawalRoutes);
 router.use('/provider/gallery', galleryRoutes);
 router.use('/admin', adminRoutes);
 router.use('/complaints', complaintRoutes);
+router.use('/locations', locationRoutes);
 
 export default router;

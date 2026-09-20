@@ -49,6 +49,7 @@ const ProviderReviewsPage = lazy(() => import('./pages/provider/ReviewsPage'));
 const ProviderSettingsPage = lazy(() => import('./pages/provider/ProviderSettingsPage'));
 
 // Admin pages
+const AdminAnalyticsPage = lazy(() => import('./pages/admin/AdminAnalyticsPage'));
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage'));
 const AdminProvidersPage = lazy(() => import('./pages/admin/AdminProvidersPage'));
@@ -139,7 +140,8 @@ function App() {
 
         {/* Admin routes */}
         <Route element={<ProtectedRoute roles={[env.ROLES.ADMIN]}><AdminLayout /></ProtectedRoute>}>
-          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
+          <Route path="/admin/dashboard" element={<AdminAnalyticsPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/customers" element={<AdminCustomersPage />} />
           <Route path="/admin/customers/:id" element={<AdminCustomerDetailPage />} />

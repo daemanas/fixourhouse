@@ -31,6 +31,17 @@ export const registerValidator = Joi.object({
     phone: phoneSchema,
     password: Joi.string().min(6).max(50).required(),
     role: Joi.string().valid('customer', 'provider').default('customer'),
+    location: Joi.string().allow('').optional(),
+    locationData: Joi.object({
+      country: Joi.string().allow('').optional(),
+      state: Joi.string().allow('').optional(),
+      district: Joi.string().allow('').optional(),
+      city: Joi.string().allow('').optional(),
+      countryId: Joi.string().allow('', null).optional(),
+      stateId: Joi.string().allow('', null).optional(),
+      districtId: Joi.string().allow('', null).optional(),
+      cityId: Joi.string().allow('', null).optional(),
+    }).optional(),
   }),
 });
 

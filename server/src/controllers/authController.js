@@ -12,7 +12,7 @@ const generateOtp = () => {
 };
 
 export const register = asyncHandler(async (req, res) => {
-  const { name, phone, password, role } = req.body;
+  const { name, phone, password, role, location, locationData } = req.body;
 
   const existingUser = await User.findOne({ phone });
   if (existingUser) {
@@ -27,6 +27,8 @@ export const register = asyncHandler(async (req, res) => {
     phone,
     password,
     role,
+    location: location || '',
+    locationData: locationData || {},
     otp: { code: otp, expiresAt: otpExpiresAt },
   });
 
@@ -66,6 +68,7 @@ export const register = asyncHandler(async (req, res) => {
           status: user.status,
           avatar: user.avatar,
           location: user.location || '',
+          locationData: user.locationData || {},
         },
         token,
         refreshToken,
@@ -118,6 +121,7 @@ export const verifyOtp = asyncHandler(async (req, res) => {
   }
 
   user.lastLogin = new Date();
+  user.lastActiveAt = new Date();
   await user.save();
 
   const token = generateToken(user._id, user.role);
@@ -136,6 +140,7 @@ export const verifyOtp = asyncHandler(async (req, res) => {
           status: user.status,
           avatar: user.avatar,
           location: user.location || '',
+          locationData: user.locationData || {},
         },
         token,
         refreshToken,
@@ -191,6 +196,7 @@ export const login = asyncHandler(async (req, res) => {
   }
 
   user.lastLogin = new Date();
+  user.lastActiveAt = new Date();
   await user.save();
 
   const token = generateToken(user._id, user.role);
@@ -286,6 +292,7 @@ export const getMe = asyncHandler(async (req, res) => {
           status: user.status,
           avatar: user.avatar,
           location: user.location || '',
+          locationData: user.locationData || {},
           createdAt: user.createdAt,
         },
       },

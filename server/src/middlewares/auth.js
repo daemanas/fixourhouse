@@ -32,6 +32,13 @@ export const protect = asyncHandler(async (req, res, next) => {
     }
 
     req.user = user;
+
+    // Asynchronously update lastActiveAt if not updated in the last 5 minutes
+    const now = new Date();
+    if (!user.lastActiveAt || now.getTime() - new Date(user.lastActiveAt).getTime() > 5 * 60 * 1000) {
+      User.findByIdAndUpdate(user._id, { lastActiveAt: now }).exec().catch(() => {});
+    }
+
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError') {

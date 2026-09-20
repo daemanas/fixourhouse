@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Card from '../../components/ui/Card';
+import LocationCascade from '../../components/common/LocationCascade';
 
 const roles = [
   { value: 'customer', label: 'Customer', description: 'Book trusted local services', icon: User },
@@ -20,6 +21,14 @@ export function RegisterPage() {
   const [role, setRole] = useState('customer');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [locationData, setLocationData] = useState({
+    state: '',
+    district: '',
+    city: '',
+    stateId: '',
+    districtId: '',
+    cityId: '',
+  });
   const {
     register,
     handleSubmit,
@@ -29,11 +38,16 @@ export function RegisterPage() {
   const onSubmit = async (data) => {
     setSubmitting(true);
     try {
+      const formattedLoc = [locationData.city, locationData.district, locationData.state]
+        .filter(Boolean)
+        .join(', ');
       await registerUser({
         name: data.name,
         phone: data.phone,
         password: data.password,
         role,
+        location: formattedLoc,
+        locationData,
       });
       toast.success('Account created! Please verify your phone number.');
       navigate('/auth/otp', { state: { phone: data.phone } });
@@ -158,6 +172,14 @@ export function RegisterPage() {
               {errors.password && (
                 <p className="mt-1 text-sm text-danger-600 dark:text-danger-400">{errors.password.message}</p>
               )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-ink-light dark:text-ink-dark mb-2">Location (Optional)</label>
+              <LocationCascade
+                value={locationData}
+                onChange={setLocationData}
+              />
             </div>
 
             <Button type="submit" fullWidth size="lg" disabled={submitting}>

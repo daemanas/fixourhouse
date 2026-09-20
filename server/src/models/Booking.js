@@ -23,6 +23,25 @@ const bookingSchema = new mongoose.Schema(
       required: true,
     },
     serviceName: String,
+    // Snapshots for historical integrity
+    serviceSnapshot: {
+      serviceId: mongoose.Schema.Types.ObjectId,
+      serviceName: String,
+      description: String,
+      price: Number,
+    },
+    customerSnapshot: {
+      name: String,
+      phone: String,
+    },
+    bookingAddress: {
+      line1: String,
+      line2: String,
+      city: String,
+      state: String,
+      pincode: String,
+      country: { type: String, default: 'India' },
+    },
     amount: {
       type: Number,
       required: true,
