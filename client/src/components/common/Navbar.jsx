@@ -6,6 +6,7 @@ import { useTheme } from '../../context/ThemeContext';
 import BrandLockup from './BrandLockup';
 import Button from '../ui/Button';
 import Avatar from '../ui/Avatar';
+import NotificationMenu from './NotificationMenu';
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -83,8 +84,10 @@ export function Navbar() {
             </button>
 
             {isAuthenticated ? (
-              <div className="relative">
-                <button
+              <>
+                <NotificationMenu />
+                <div className="relative">
+                  <button
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                   className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 >
@@ -113,6 +116,7 @@ export function Navbar() {
                   </div>
                 )}
               </div>
+            </>
             ) : (
               <>
                 <Link to="/auth/login">

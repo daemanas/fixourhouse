@@ -21,7 +21,6 @@ const items = [
   { to: '/provider/availability', label: 'Availability', icon: CalendarClock },
   { to: '/provider/profile', label: 'Profile', icon: User },
   { to: '/provider/gallery', label: 'Gallery', icon: Image },
-  { to: '/provider/documents', label: 'Documents', icon: Wallet },
   { to: '/provider/services', label: 'Services', icon: Wrench },
   { to: '/provider/pricing', label: 'Pricing', icon: IndianRupee },
   { to: '/provider/earnings', label: 'Earnings', icon: Wallet },
@@ -35,8 +34,8 @@ export function ProviderLayout() {
   return (
     <DashboardLayout
       items={items}
-      title="Provider Dashboard"
-      subtitle="Manage your services, jobs, and earnings"
+      title="Provider Workspace"
+      subtitle="Manage your services, bookings, availability and earnings"
     />
   );
 }

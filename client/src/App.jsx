@@ -41,7 +41,6 @@ const ProviderJobsPage = lazy(() => import('./pages/provider/JobsPage'));
 const ProviderAvailabilityPage = lazy(() => import('./pages/provider/AvailabilityPage'));
 const ProviderProfileSettingsPage = lazy(() => import('./pages/provider/ProviderProfilePage'));
 const ProviderGalleryPage = lazy(() => import('./pages/provider/GalleryPage'));
-const ProviderDocumentsPage = lazy(() => import('./pages/provider/DocumentsPage'));
 const ProviderServicesPage = lazy(() => import('./pages/provider/ServicesPage'));
 const ProviderEarningsPage = lazy(() => import('./pages/provider/EarningsPage'));
 const ProviderWithdrawalsPage = lazy(() => import('./pages/provider/WithdrawalsPage'));
@@ -132,7 +131,6 @@ function App() {
           <Route path="/provider/availability" element={<ProviderAvailabilityPage />} />
           <Route path="/provider/profile" element={<ProviderProfileSettingsPage />} />
           <Route path="/provider/gallery" element={<ProviderGalleryPage />} />
-          <Route path="/provider/documents" element={<ProviderDocumentsPage />} />
           <Route path="/provider/services" element={<ProviderServicesPage />} />
           <Route path="/provider/earnings" element={<ProviderEarningsPage />} />
           <Route path="/provider/withdrawals" element={<ProviderWithdrawalsPage />} />

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
@@ -28,6 +28,7 @@ const typeConfig = {
   system: { icon: ShieldAlert, color: 'danger' },
   warning: { icon: ShieldAlert, color: 'warning' },
   verification: { icon: ShieldCheck, color: 'primary' },
+  complaint: { icon: MessageSquare, color: 'warning' },
 };
 
 const typeColors = {
@@ -56,9 +57,13 @@ const formatTime = (dateStr) => {
 };
 
 export function NotificationsPage() {
-  const { notifications, unreadCount, loading, error, refresh, markRead, markAllRead, clearAll } = useNotifications();
+  const { notifications, unreadCount, loading, error, refresh, markRead, markAllRead, clearAll, deleteSingle } = useNotifications();
   const [filter, setFilter] = useState('all');
   const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    refresh();
+  }, []); // Run on mount
 
   const filteredNotifications = notifications.filter((n) => {
     if (filter === 'all') return true;
@@ -79,7 +84,7 @@ export function NotificationsPage() {
     try {
       await markRead(id);
     } catch (err) {
-      // Silently ignore - notification still shows
+      // Silently ignore
     }
   };
 
@@ -95,12 +100,23 @@ export function NotificationsPage() {
     }
   };
 
+  const handleDeleteSingle = async (e, id) => {
+    e.stopPropagation();
+    try {
+      await deleteSingle(id);
+      toast.success('Notification deleted');
+    } catch (err) {
+      toast.error('Failed to delete notification');
+    }
+  };
+
   const filterTabs = [
     { id: 'all', label: 'All' },
     { id: 'unread', label: 'Unread' },
     { id: 'booking', label: 'Bookings' },
-    { id: 'review', label: 'Reviews' },
     { id: 'payment', label: 'Payments' },
+    { id: 'verification', label: 'Verification' },
+    { id: 'review', label: 'Reviews' },
     { id: 'system', label: 'System' },
   ];
 
@@ -209,11 +225,21 @@ export function NotificationsPage() {
                             {notification.message}
                           </p>
                         </div>
-                        {!notification.read && (
-                          <Badge variant="primary" className="shrink-0">
-                            New
-                          </Badge>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {!notification.read && (
+                            <Badge variant="primary" className="shrink-0">
+                              New
+                            </Badge>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteSingle(e, notification._id)}
+                            className="p-1 text-gray-400 hover:text-danger-500 transition-colors rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
+                            title="Delete notification"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
                       <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
                         {formatTime(notification.createdAt)}

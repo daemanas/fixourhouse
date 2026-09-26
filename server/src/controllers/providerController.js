@@ -38,7 +38,7 @@ export const getProviders = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
 
-  const filter = { verificationStatus: 'approved' };
+  const filter = { verificationStatus: { $in: ['approved', 'verified'] } };
 
   if (req.query.category) filter.category = req.query.category;
   if (req.query.minRating) filter.rating = { $gte: parseFloat(req.query.minRating) };
@@ -139,7 +139,7 @@ export const getProviderById = asyncHandler(async (req, res) => {
   }
 
   // Unapproved/suspended/blocked providers must not appear publicly
-  if (provider.verificationStatus !== 'approved') {
+  if (!['approved', 'verified'].includes(provider.verificationStatus) && !provider.isVerified) {
     throw new ApiError(404, 'Provider not found');
   }
 
@@ -294,6 +294,10 @@ const PROVIDER_PROFILE_FIELDS = [
 // @route   PATCH /api/v1/providers/me/profile
 // @access  Private
 export const updateMyProviderProfile = asyncHandler(async (req, res) => {
+  // Security enforcement: provider frontend must NEVER be able to set verificationStatus or isVerified
+  delete req.body.verificationStatus;
+  delete req.body.isVerified;
+
   const providerUpdate = {};
   PROVIDER_PROFILE_FIELDS.forEach((field) => {
     if (req.body[field] !== undefined) providerUpdate[field] = req.body[field];
@@ -602,6 +606,12 @@ export const getProviderStats = asyncHandler(async (req, res) => {
     new ApiResponse(
       200,
       {
+        provider: {
+          _id: provider._id,
+          businessName: provider.businessName,
+          verificationStatus: provider.verificationStatus,
+          isVerified: provider.isVerified || ['approved', 'verified'].includes(provider.verificationStatus),
+        },
         stats: {
           totalBookings,
           pendingBookings,
@@ -850,18 +860,6 @@ export const updateProviderDocumentStatus = asyncHandler(async (req, res) => {
 
   if (typeof verified === 'boolean') doc.verified = verified;
   if (typeof note === 'string') doc.note = note;
-
-  // Reflect overall verification status: approved only when every uploaded
-  // document is verified; pending when at least one remains unverified.
-  const hasDocs = provider.documents.length > 0;
-  const allVerified = hasDocs && provider.documents.every((d) => d.verified);
-  if (hasDocs && !allVerified && provider.verificationStatus === 'approved') {
-    provider.verificationStatus = 'pending';
-    provider.isVerified = false;
-  } else if (allVerified && provider.verificationStatus === 'pending') {
-    provider.verificationStatus = 'approved';
-    provider.isVerified = true;
-  }
 
   await provider.save();
 

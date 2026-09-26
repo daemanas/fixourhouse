@@ -157,7 +157,7 @@ const providerSchema = new mongoose.Schema(
     },
     verificationStatus: {
       type: String,
-      enum: ['pending', 'approved', 'rejected', 'suspended', 'blocked'],
+      enum: ['pending', 'approved', 'verified', 'rejected', 'suspended', 'blocked'],
       default: 'pending',
     },
     documents: [

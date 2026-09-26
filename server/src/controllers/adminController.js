@@ -396,47 +396,71 @@ export const getProviders = asyncHandler(async (req, res) => {
 
 // @desc    Update provider verification/status
 // @route   PATCH /api/v1/admin/providers/:id/status
+// @route   PATCH /api/v1/admin/providers/:id/verification
 // @access  Private (Admin)
 export const updateProviderStatus = asyncHandler(async (req, res) => {
-  const { status, reason } = req.body;
+  const statusInput = req.body.verificationStatus || req.body.status;
+  const reason = req.body.reason;
 
   const provider = await Provider.findById(req.params.id).populate('userId');
   if (!provider) {
     throw new ApiError(404, 'Provider not found');
   }
 
-  const validStatuses = ['approved', 'rejected', 'suspended', 'blocked', 'pending'];
-  if (!validStatuses.includes(status)) {
+  const previousVerificationStatus = provider.verificationStatus;
+  const wasAlreadyVerified = provider.isVerified || ['approved', 'verified'].includes(previousVerificationStatus);
+
+  const normalizedStatus = statusInput === 'approved' ? 'verified' : statusInput;
+  const validStatuses = ['verified', 'approved', 'pending', 'rejected', 'suspended', 'blocked'];
+  if (!validStatuses.includes(normalizedStatus)) {
     throw new ApiError(400, 'Invalid status');
   }
 
-  provider.verificationStatus = status;
-  provider.isVerified = status === 'approved';
+  const isVerified = normalizedStatus === 'verified' || normalizedStatus === 'approved';
+  const targetVerificationStatus = isVerified ? 'verified' : normalizedStatus;
+
+  provider.verificationStatus = targetVerificationStatus;
+  provider.isVerified = isVerified;
   await provider.save();
 
   // Sync user status for block/suspend
-  if (status === 'blocked' || status === 'suspended') {
-    provider.userId.status = status;
-    await provider.userId.save();
-  } else if (status === 'approved' || status === 'pending') {
-    provider.userId.status = 'active';
-    await provider.userId.save();
+  if (provider.userId) {
+    if (targetVerificationStatus === 'blocked' || targetVerificationStatus === 'suspended') {
+      provider.userId.status = targetVerificationStatus;
+      await provider.userId.save();
+    } else if (isVerified || targetVerificationStatus === 'pending') {
+      provider.userId.status = 'active';
+      await provider.userId.save();
+    }
   }
 
-  // Send notification
-  await Notification.create({
-    userId: provider.userId._id,
-    type: 'verification',
-    title: `Account ${status}`,
-    message:
-      reason ||
-      (status === 'approved'
-        ? 'Congratulations! Your provider account has been approved.'
-        : `Your provider account status has been updated to ${status}.`),
-  });
+  // Send notification to provider ONLY if state actually changed, preventing duplicate verification notifications if already verified
+  const recipientUserId = provider.userId?._id || provider.userId;
+  if (recipientUserId) {
+    if (isVerified && !wasAlreadyVerified) {
+      await Notification.create({
+        userId: recipientUserId,
+        type: 'verification',
+        title: 'Account Verified',
+        message:
+          'Your LocalFix provider account has been successfully verified. You can now use verified provider features.',
+        read: false,
+      });
+    } else if (!isVerified && previousVerificationStatus !== targetVerificationStatus) {
+      await Notification.create({
+        userId: recipientUserId,
+        type: 'verification',
+        title: `Account ${targetVerificationStatus}`,
+        message:
+          reason ||
+          `Your provider account status has been updated to ${targetVerificationStatus}.`,
+        read: false,
+      });
+    }
+  }
 
   res.status(200).json(
-    new ApiResponse(200, { provider }, `Provider ${status} successfully`)
+    new ApiResponse(200, { provider }, `Provider verification status updated to ${targetVerificationStatus} successfully`)
   );
 });
 

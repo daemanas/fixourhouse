@@ -25,8 +25,8 @@ export function CustomerLayout() {
   return (
     <DashboardLayout
       items={items}
-      title="Customer Dashboard"
-      subtitle="Find and book trusted local services"
+      title="My LocalFix"
+      subtitle="Find and manage trusted local services"
       showSearch
     />
   );

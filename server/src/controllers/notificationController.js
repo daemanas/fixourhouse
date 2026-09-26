@@ -31,6 +31,35 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
   );
 });
 
+// @desc    Get current user's unread notifications count
+// @route   GET /api/v1/notifications/unread-count
+// @access  Private
+export const getUnreadCount = asyncHandler(async (req, res) => {
+  const unreadCount = await Notification.countDocuments({ userId: req.user._id, read: false });
+
+  res.status(200).json(
+    new ApiResponse(200, { unreadCount }, 'Unread count fetched successfully')
+  );
+});
+
+// @desc    Create a test notification for the authenticated user
+// @route   POST /api/v1/notifications/test
+// @access  Private
+export const createTestNotification = asyncHandler(async (req, res) => {
+  const notification = await Notification.create({
+    userId: req.user._id,
+    type: req.body.type || 'system',
+    title: req.body.title || 'Test Notification',
+    message: req.body.message || 'This is a test notification saved in MongoDB.',
+    data: req.body.data || {},
+    read: false,
+  });
+
+  res.status(201).json(
+    new ApiResponse(201, { notification }, 'Test notification created successfully')
+  );
+});
+
 // @desc    Mark notification as read
 // @route   PATCH /api/v1/notifications/:id/read
 // @access  Private
@@ -74,5 +103,26 @@ export const clearMyNotifications = asyncHandler(async (req, res) => {
   const result = await Notification.deleteMany({ userId: req.user._id });
   res.status(200).json(
     new ApiResponse(200, { deletedCount: result.deletedCount }, 'Notifications cleared successfully')
+  );
+});
+
+// @desc    Delete single notification by ID
+// @route   DELETE /api/v1/notifications/:id
+// @access  Private
+export const deleteNotification = asyncHandler(async (req, res) => {
+  const notification = await Notification.findOneAndDelete({
+    _id: req.params.id,
+    userId: req.user._id,
+  });
+
+  if (!notification) {
+    return res.status(404).json({
+      success: false,
+      message: 'Notification not found',
+    });
+  }
+
+  res.status(200).json(
+    new ApiResponse(200, {}, 'Notification deleted successfully')
   );
 });

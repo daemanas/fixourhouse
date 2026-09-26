@@ -31,7 +31,7 @@ export const createBooking = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Provider not found');
   }
 
-  if (provider.verificationStatus !== 'approved') {
+  if (!['approved', 'verified'].includes(provider.verificationStatus) && !provider.isVerified) {
     throw new ApiError(400, 'Provider is not verified yet');
   }
 
@@ -203,6 +203,12 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
   const booking = await Booking.findById(req.params.id);
   if (!booking) {
     throw new ApiError(404, 'Booking not found');
+  }
+
+  if (booking.status === status) {
+    return res.status(200).json(
+      new ApiResponse(200, { booking }, `Booking is already ${status}`)
+    );
   }
 
   if (req.user.role === 'provider') {
@@ -389,19 +395,33 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
     await booking.save();
   }
 
-  // Notify the other party
-  const notifyUserId =
-    req.user.role === 'provider'
-      ? booking.customerId
-      : req.user.role === 'customer'
-      ? (await Provider.findById(booking.providerId)).userId
-      : null;
+  // Notify recipient(s) of the status update
+  const recipientUserIds = [];
+  if (req.user.role === 'provider') {
+    if (booking.customerId) recipientUserIds.push(booking.customerId);
+  } else if (req.user.role === 'customer') {
+    const provDoc = await Provider.findById(booking.providerId);
+    if (provDoc?.userId) recipientUserIds.push(provDoc.userId);
+  } else if (req.user.role === 'admin') {
+    if (booking.customerId) recipientUserIds.push(booking.customerId);
+    const provDoc = await Provider.findById(booking.providerId);
+    if (provDoc?.userId) recipientUserIds.push(provDoc.userId);
+  }
 
-  if (notifyUserId) {
+  const statusTitleMap = {
+    accepted: 'Booking Accepted',
+    rejected: 'Booking Rejected',
+    working: 'Booking In Progress',
+    completed: 'Booking Completed',
+    cancelled: 'Booking Cancelled',
+  };
+  const notificationTitle = statusTitleMap[status] || `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`;
+
+  for (const userId of recipientUserIds) {
     await Notification.create({
-      userId: notifyUserId,
+      userId,
       type: 'booking',
-      title: `Booking ${status}`,
+      title: notificationTitle,
       message: `Your booking ${booking.bookingId} has been ${status}`,
       data: { bookingId: booking._id },
     });

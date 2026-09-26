@@ -9,6 +9,7 @@ import {
   Clock,
   ArrowRight,
   Loader2,
+  ShieldCheck,
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import StatCard from '../../components/ui/StatCard';
@@ -33,6 +34,7 @@ const statusConfig = {
 export function ProviderDashboard() {
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
+  const [providerInfo, setProviderInfo] = useState(null);
   const [recentBookings, setRecentBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -46,6 +48,7 @@ export function ProviderDashboard() {
         getMyBookings({ limit: 5 }),
       ]);
       setStats(statsRes.data.data.stats);
+      setProviderInfo(statsRes.data.data.provider || null);
       setRecentBookings(bookingsRes.data.data.bookings || []);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load dashboard.');
@@ -110,12 +113,17 @@ export function ProviderDashboard() {
     },
   ];
 
+  const isVerified =
+    providerInfo?.isVerified ||
+    ['approved', 'verified'].includes(providerInfo?.verificationStatus) ||
+    ['approved', 'verified'].includes(user?.verificationStatus);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-ink-light dark:text-ink-dark">
-            Welcome back, {user?.name?.split(' ')[0] || 'Provider'}
+            Welcome back, {providerInfo?.businessName || user?.name || 'Provider'}
           </h1>
           <p className="mt-1 text-gray-500 dark:text-gray-400">
             Here's what's happening with your services today
@@ -128,6 +136,37 @@ export function ProviderDashboard() {
           </Button>
         </Link>
       </div>
+
+      {/* Verification Status Banner */}
+      {isVerified ? (
+        <Card className="p-5 border-l-4 border-l-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="h-6 w-6 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-base font-semibold text-emerald-900 dark:text-emerald-200">
+                Account Verified (🟢)
+              </h3>
+              <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-300">
+                Your provider profile is fully verified by LocalFix Admin. Your business is live and listed for customer search and bookings.
+              </p>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <Card className="p-5 border-l-4 border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20">
+          <div className="flex items-start gap-3">
+            <Clock className="h-6 w-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-base font-semibold text-amber-900 dark:text-amber-200">
+                Verification Pending (🟡)
+              </h3>
+              <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                Your account verification call is currently pending with the LocalFix team. Our administrator will contact you at your registered phone number to verify your services.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

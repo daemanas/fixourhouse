@@ -75,6 +75,7 @@ router.get('/providers', getProviders);
 router.get('/providers/:id', getAdminProviderDetail);
 router.patch('/providers/:id/documents/:docId', updateProviderDocumentStatus);
 router.patch('/providers/:id/status', updateProviderStatus);
+router.patch('/providers/:id/verification', updateProviderStatus);
 
 router.get('/bookings', getBookings);
 router.get('/bookings/:bookingId', getBookingDetail);
