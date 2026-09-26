@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getStats,
   getAnalytics,
+  getLocationAnalytics,
   getUsers,
   getCustomers,
   getCustomerDetail,
@@ -38,6 +39,7 @@ router.use(protect, authorize('admin'));
 
 router.get('/stats', getStats);
 router.get('/analytics', getAnalytics);
+router.get('/analytics/locations', getLocationAnalytics);
 router.get('/revenue', getRevenue);
 
 router.get('/users', getUsers);

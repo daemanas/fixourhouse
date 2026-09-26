@@ -8,6 +8,7 @@ import Report from '../models/Report.js';
 import Complaint from '../models/Complaint.js';
 import Payment from '../models/Payment.js';
 import Withdrawal from '../models/Withdrawal.js';
+import Location from '../models/Location.js';
 import { buildRevenueReport, buildRevenueCsv } from '../utils/revenueReport.js';
 import Notification from '../models/Notification.js';
 import ApiError from '../utils/ApiError.js';
@@ -1137,6 +1138,222 @@ export const updateCustomerStatus = asyncHandler(async (req, res) => {
   );
 });
 
+const resolveLocationHelper = (rawState, rawDistrict, rawCity, fallbackLocData, locationById, locationNameIndex) => {
+  const fallback = rawState || rawDistrict || rawCity ? null : fallbackLocData;
+  const values = {
+    state: rawState || fallback?.stateId || fallback?.state,
+    district: rawDistrict || fallback?.districtId || fallback?.district,
+    city: rawCity || fallback?.cityId || fallback?.city,
+  };
+  const parentOf = (doc) => doc?.parentId?.toString() || null;
+  const stateFor = (doc) => {
+    if (!doc) return null;
+    if (doc.type === 'state') return doc;
+    const districtDoc = doc.type === 'district' ? doc : locationById.get(parentOf(doc));
+    return districtDoc?.type === 'district' ? locationById.get(parentOf(districtDoc)) : null;
+  };
+  const findDoc = (value, type, parentDoc, expectedState) => {
+    if (value === undefined || value === null || value === '') return null;
+    const key = value.toString().trim().toLowerCase();
+    let candidate = locationById.get(key);
+    if (candidate) {
+      if (candidate.type !== type || (parentDoc && parentOf(candidate) !== candidateId(parentDoc))) return null;
+    } else {
+      const parentId = parentDoc ? candidateId(parentDoc) : '*';
+      const matches = locationNameIndex.get(`${type}:${parentId}:${key}`) || [];
+      candidate = matches.find((doc) => !expectedState || candidateId(stateFor(doc)) === candidateId(expectedState));
+      if (!candidate || matches.filter((doc) => !expectedState || candidateId(stateFor(doc)) === candidateId(expectedState)).length !== 1) return null;
+    }
+    if (expectedState && candidateId(stateFor(candidate)) !== candidateId(expectedState)) return null;
+    return candidate;
+  };
+  const candidateId = (doc) => doc?._id?.toString() || null;
+
+  let stateDoc = findDoc(values.state, 'state');
+  let districtDoc = findDoc(values.district, 'district', stateDoc);
+  let cityDoc = findDoc(values.city, 'city', districtDoc, stateDoc);
+
+  if (cityDoc) {
+    const cityDistrict = locationById.get(parentOf(cityDoc));
+    const cityState = stateFor(cityDoc);
+    if (!cityDistrict || cityDistrict.type !== 'district' || !cityState || cityState.type !== 'state') return null;
+    if ((districtDoc && candidateId(districtDoc) !== candidateId(cityDistrict)) || (stateDoc && candidateId(stateDoc) !== candidateId(cityState))) return null;
+    districtDoc = cityDistrict;
+    stateDoc = cityState;
+  } else if (districtDoc) {
+    const districtState = stateFor(districtDoc);
+    if (!districtState || districtState.type !== 'state' || (stateDoc && candidateId(stateDoc) !== candidateId(districtState))) return null;
+    stateDoc = districtState;
+  }
+
+  if (!stateDoc || !districtDoc || !cityDoc) return null;
+  const countryDoc = locationById.get(parentOf(stateDoc));
+  if (!countryDoc || countryDoc.type !== 'country') return null;
+
+  return { country: countryDoc.name, state: stateDoc.name, district: districtDoc.name, city: cityDoc.name };
+};
+
+// Internal location aggregator helper
+const aggregateLocationRecords = async ({ level, state, district, bookingDateQuery, locationById, locationNameIndex }) => {
+  const resolve = (rawState, rawDistrict, rawCity, fallbackLocData) =>
+    resolveLocationHelper(rawState, rawDistrict, rawCity, fallbackLocData, locationById, locationNameIndex);
+
+  const allStatesSet = new Set(), allDistrictsSet = new Set(), allCitiesSet = new Set();
+  const aggregatedMap = new Map();
+  const unmappedRecords = { customers: 0, providers: 0, bookings: 0 };
+
+  const getOrInitEntry = (name) => {
+    const key = name.toLowerCase();
+    if (!aggregatedMap.has(key)) {
+      aggregatedMap.set(key, { name, customers: 0, providers: 0, bookings: 0, completedBookings: 0 });
+    }
+    return aggregatedMap.get(key);
+  };
+
+  const customers = await User.find({ role: 'customer' }).select('locationData location');
+  customers.forEach((u) => {
+    const loc = resolve(u.locationData?.stateId || u.locationData?.state, u.locationData?.districtId || u.locationData?.district, u.locationData?.cityId || u.locationData?.city, u.locationData);
+    if (!loc) {
+      unmappedRecords.customers += 1;
+      return;
+    }
+    allStatesSet.add(loc.state);
+    allDistrictsSet.add(`${loc.state}::${loc.district}`);
+    allCitiesSet.add(`${loc.state}::${loc.district}::${loc.city}`);
+
+    if (level === 'state') getOrInitEntry(loc.state).customers += 1;
+    else if (level === 'district' && state && loc.state.toLowerCase() === state.toLowerCase()) getOrInitEntry(loc.district).customers += 1;
+    else if (level === 'city' && state && district && loc.state.toLowerCase() === state.toLowerCase() && loc.district.toLowerCase() === district.toLowerCase()) getOrInitEntry(loc.city).customers += 1;
+  });
+
+  const providers = await Provider.find().select('location');
+  providers.forEach((p) => {
+    const loc = resolve(p.location?.stateId || p.location?.state, p.location?.districtId || p.location?.district, p.location?.cityId || p.location?.city, p.location);
+    if (!loc) {
+      unmappedRecords.providers += 1;
+      return;
+    }
+    allStatesSet.add(loc.state);
+    allDistrictsSet.add(`${loc.state}::${loc.district}`);
+    allCitiesSet.add(`${loc.state}::${loc.district}::${loc.city}`);
+
+    if (level === 'state') getOrInitEntry(loc.state).providers += 1;
+    else if (level === 'district' && state && loc.state.toLowerCase() === state.toLowerCase()) getOrInitEntry(loc.district).providers += 1;
+    else if (level === 'city' && state && district && loc.state.toLowerCase() === state.toLowerCase() && loc.district.toLowerCase() === district.toLowerCase()) getOrInitEntry(loc.city).providers += 1;
+  });
+
+  const bookings = await Booking.find(bookingDateQuery).populate('customerId').populate('providerId');
+  bookings.forEach((b) => {
+    const addr = b.bookingAddress || b.address || {};
+    const loc = resolve(addr.state, addr.district, addr.city, b.customerId?.locationData);
+    if (!loc) {
+      unmappedRecords.bookings += 1;
+      return;
+    }
+
+    const isCompleted = b.status === 'completed';
+    if (level === 'state') {
+      const entry = getOrInitEntry(loc.state);
+      entry.bookings += 1;
+      if (isCompleted) entry.completedBookings += 1;
+    } else if (level === 'district' && state && loc.state.toLowerCase() === state.toLowerCase()) {
+      const entry = getOrInitEntry(loc.district);
+      entry.bookings += 1;
+      if (isCompleted) entry.completedBookings += 1;
+    } else if (level === 'city' && state && district && loc.state.toLowerCase() === state.toLowerCase() && loc.district.toLowerCase() === district.toLowerCase()) {
+      const entry = getOrInitEntry(loc.city);
+      entry.bookings += 1;
+      if (isCompleted) entry.completedBookings += 1;
+    }
+  });
+
+  return { allStatesSet, allDistrictsSet, allCitiesSet, aggregatedMap, unmappedRecords };
+};
+
+/**
+ * Helper function to compute 3-level hierarchical location analytics (State -> District -> City).
+ * Uses canonical Location collection documents to match and normalize location data.
+ */
+export async function getNormalizedLocationAnalyticsData({
+  level = 'state',
+  state,
+  district,
+  period = '30d',
+  startDate,
+  endDate,
+}) {
+  const locationDocs = await Location.find({ isActive: true }).select('name type parentId code _id');
+  const locationById = new Map();
+  const locationNameIndex = new Map();
+
+  locationDocs.forEach((doc) => {
+    const id = doc._id.toString();
+    const parentId = doc.parentId?.toString() || '*';
+    const name = doc.name.trim().toLowerCase();
+    locationById.set(id, doc);
+    for (const key of [`${doc.type}:${parentId}:${name}`, `${doc.type}:*:${name}`]) {
+      if (!locationNameIndex.has(key)) locationNameIndex.set(key, []);
+      locationNameIndex.get(key).push(doc);
+    }
+  });
+
+  const now = new Date();
+  let bookingDateQuery = {};
+  if (period && period !== 'all') {
+    let periodStart;
+    if (period === 'today') periodStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    else if (period === '7d') periodStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    else if (period === '30d') periodStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    else if (period === 'this_month') periodStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    else if (period === 'last_month') periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+    else if (period === 'this_year') periodStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+    else if (period === '1y') periodStart = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+    else if (period === 'custom' && startDate && endDate) {
+      periodStart = new Date(startDate);
+      const periodEnd = new Date(endDate);
+      periodEnd.setHours(23, 59, 59, 999);
+      bookingDateQuery = { createdAt: { $gte: periodStart, $lte: periodEnd } };
+    }
+    if (periodStart && !bookingDateQuery.createdAt) bookingDateQuery = { createdAt: { $gte: periodStart } };
+  }
+
+  const { allStatesSet, allDistrictsSet, allCitiesSet, aggregatedMap, unmappedRecords } = await aggregateLocationRecords({
+    level,
+    state,
+    district,
+    bookingDateQuery,
+    locationById,
+    locationNameIndex,
+  });
+
+  const locationList = Array.from(aggregatedMap.values()).sort((a, b) => {
+    if (b.bookings !== a.bookings) return b.bookings - a.bookings;
+    if (b.completedBookings !== a.completedBookings) return b.completedBookings - a.completedBookings;
+    if (b.providers !== a.providers) return b.providers - a.providers;
+    return b.customers - a.customers;
+  });
+
+  return {
+    level,
+    state: state || null,
+    district: district || null,
+    totalStates: allStatesSet.size,
+    totalDistricts: allDistrictsSet.size,
+    totalCities: allCitiesSet.size,
+    unmappedRecords,
+    locations: locationList.map((item, idx) => ({ rank: idx + 1, ...item })),
+  };
+}
+
+// @desc    Get hierarchical location analytics (State -> District -> City)
+// @route   GET /api/v1/admin/analytics/locations
+// @access  Private (Admin)
+export const getLocationAnalytics = asyncHandler(async (req, res) => {
+  const { level = 'state', state, district, period = '30d', startDate, endDate } = req.query;
+  const locationData = await getNormalizedLocationAnalyticsData({ level, state, district, period, startDate, endDate });
+  res.status(200).json(new ApiResponse(200, locationData, 'Location analytics fetched successfully'));
+});
+
 
 // @desc    Get platform analytics overview
 // @route   GET /api/v1/admin/analytics
@@ -1277,93 +1494,12 @@ export const getAnalytics = asyncHandler(async (req, res) => {
     : 0;
 
   // 5. Location Analytics & Top Locations
-  const normalizeLoc = (str) => {
-    if (!str || typeof str !== 'string') return '';
-    const cleaned = str.trim();
-    if (!cleaned) return '';
-    return cleaned
-      .split(/\s+/)
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-      .join(' ');
-  };
-
-  const citiesSet = new Set();
-  const districtsSet = new Set();
-  const locationStatsMap = new Map();
-
-  const getLocEntry = (name) => {
-    const key = name.toLowerCase();
-    if (!locationStatsMap.has(key)) {
-      locationStatsMap.set(key, {
-        name,
-        customers: 0,
-        providers: 0,
-        bookings: 0,
-        completedBookings: 0,
-      });
-    }
-    return locationStatsMap.get(key);
-  };
-
-  // User locations
-  const usersWithLoc = await User.find({ location: { $exists: true, $ne: '' } }).select('location role');
-  usersWithLoc.forEach((u) => {
-    const norm = normalizeLoc(u.location);
-    if (norm) {
-      citiesSet.add(norm);
-      if (u.role === 'customer') {
-        const entry = getLocEntry(norm);
-        entry.customers += 1;
-      }
-    }
+  const locationData = await getNormalizedLocationAnalyticsData({
+    level: 'state',
+    period,
+    startDate,
+    endDate,
   });
-
-  // Provider locations & service areas
-  const providersWithLoc = await Provider.find().select('location serviceArea');
-  providersWithLoc.forEach((p) => {
-    const city = normalizeLoc(p.location?.city);
-    const district = normalizeLoc(p.location?.district);
-    if (city) {
-      citiesSet.add(city);
-      const entry = getLocEntry(city);
-      entry.providers += 1;
-    }
-    if (district) {
-      districtsSet.add(district);
-    }
-    if (Array.isArray(p.serviceArea)) {
-      p.serviceArea.forEach((sa) => {
-        const normSa = normalizeLoc(sa);
-        if (normSa) citiesSet.add(normSa);
-      });
-    }
-  });
-
-  // Booking locations
-  const bookingsWithLoc = await Booking.find().select('address status');
-  bookingsWithLoc.forEach((b) => {
-    const city = normalizeLoc(b.address?.city);
-    if (city) {
-      citiesSet.add(city);
-      const entry = getLocEntry(city);
-      entry.bookings += 1;
-      if (b.status === 'completed') {
-        entry.completedBookings += 1;
-      }
-    }
-  });
-
-  const locationList = Array.from(locationStatsMap.values())
-    .sort((a, b) => b.bookings * 3 + b.providers * 2 + b.customers - (a.bookings * 3 + a.providers * 2 + a.customers));
-
-  const topLocations = locationList.slice(0, 10).map((item, idx) => ({
-    rank: idx + 1,
-    name: item.name,
-    customers: item.customers,
-    providers: item.providers,
-    bookings: item.bookings,
-    completedBookings: item.completedBookings,
-  }));
 
   // 6. Platform Rating & Distribution
   const ratingAgg = await Review.aggregate([
@@ -1571,8 +1707,9 @@ export const getAnalytics = asyncHandler(async (req, res) => {
           totalBookings,
           completedBookings: bookingCounts.completed,
           completionRate,
-          totalCities: citiesSet.size,
-          totalDistricts: districtsSet.size,
+          totalCities: locationData.totalCities,
+          totalDistricts: locationData.totalDistricts,
+          totalStates: locationData.totalStates,
           platformRating: ratingInfo.average,
           totalReviews: ratingInfo.totalReviews,
         },
@@ -1588,9 +1725,11 @@ export const getAnalytics = asyncHandler(async (req, res) => {
         },
         ratingOverview: ratingInfo,
         locations: {
-          totalCities: citiesSet.size,
-          totalDistricts: districtsSet.size,
-          topLocations,
+          totalStates: locationData.totalStates,
+          totalDistricts: locationData.totalDistricts,
+          totalCities: locationData.totalCities,
+          topLocations: locationData.locations,
+          level: 'state',
         },
         userGrowth: {
           customerGrowthPercent: custGrowthPercent,

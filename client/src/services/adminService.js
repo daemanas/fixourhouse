@@ -3,6 +3,7 @@ import api from './api';
 // Dashboard stats
 export const getAdminStats = () => api.get('/admin/stats');
 export const getAdminAnalytics = (params = {}) => api.get('/admin/analytics', { params });
+export const getAdminLocationAnalytics = (params = {}) => api.get('/admin/analytics/locations', { params });
 
 // Users (customers)
 export const getAdminUsers = (params = {}) => api.get('/admin/users', { params });

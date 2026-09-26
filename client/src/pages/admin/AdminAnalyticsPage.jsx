@@ -102,7 +102,12 @@ export function AdminAnalyticsPage() {
 
       <BookingAnalyticsSection bookingOverview={bookingOverview} monthlyData={monthlyData} />
 
-      <LocationAnalyticsSection locations={locations} />
+      <LocationAnalyticsSection
+        initialData={locations}
+        period={period}
+        startDate={customRange.startDate}
+        endDate={customRange.endDate}
+      />
 
       <RatingAndGrowthSection
         ratingOverview={ratingOverview}
