@@ -1,4 +1,6 @@
 import LegalLayout from '../../components/common/LegalLayout';
+import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
+import { withDynamicContact } from '../../utils/websiteContent';
 
 const sections = [
   {
@@ -111,12 +113,13 @@ const sections = [
 ];
 
 export function Terms() {
+  const { settings } = useWebsiteSettings();
   return (
     <LegalLayout
       title="Terms of Service"
       subtitle="The terms and conditions governing your use of LocalFix."
       updated="August 1, 2026"
-      sections={sections}
+      sections={withDynamicContact(sections, settings)}
     />
   );
 }

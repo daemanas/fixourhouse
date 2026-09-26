@@ -1,5 +1,5 @@
 import { Outlet, Link } from 'react-router-dom';
-import { Wrench } from 'lucide-react';
+import BrandLockup from '../components/common/BrandLockup';
 
 export function AuthLayout() {
   return (
@@ -9,10 +9,7 @@ export function AuthLayout() {
         <div className="absolute inset-0 bg-[url('/images/auth-pattern.svg')] opacity-10" />
         <div className="relative z-10 flex flex-col justify-between p-12 text-white">
           <Link to="/" className="flex items-center gap-2">
-            <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center">
-              <Wrench className="h-6 w-6" />
-            </div>
-            <span className="text-2xl font-bold">LocalFix</span>
+            <BrandLockup forceDark textClassName="text-2xl text-white" />
           </Link>
 
           <div>
@@ -45,12 +42,7 @@ export function AuthLayout() {
       <div className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-12">
         <div className="w-full max-w-md">
           <Link to="/" className="lg:hidden flex items-center justify-center gap-2 mb-8">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary-600 to-secondary-600 flex items-center justify-center">
-              <Wrench className="h-6 w-6 text-white" />
-            </div>
-            <span className="text-2xl font-bold text-ink-light dark:text-ink-dark">
-              Local<span className="text-primary-600 dark:text-primary-400">Fix</span>
-            </span>
+            <BrandLockup textClassName="text-2xl text-ink-light dark:text-ink-dark" />
           </Link>
           <Outlet />
         </div>

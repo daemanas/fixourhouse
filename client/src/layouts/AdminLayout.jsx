@@ -9,6 +9,9 @@ import {
   IndianRupee,
   Settings,
   MessageSquareWarning,
+  Bell,
+  Globe,
+  Percent,
 } from 'lucide-react';
 
 const items = [
@@ -20,7 +23,16 @@ const items = [
   { to: '/admin/reviews', label: 'Reviews', icon: TrendingUp },
   { to: '/admin/complaints', label: 'Complaints', icon: MessageSquareWarning },
   { to: '/admin/revenue', label: 'Revenue', icon: IndianRupee },
-  { to: '/admin/settings', label: 'Settings', icon: Settings },
+  { to: '/admin/notifications', label: 'Notifications', icon: Bell },
+  {
+    label: 'Settings',
+    icon: Settings,
+    children: [
+      { to: '/admin/settings', label: 'General Settings' },
+      { to: '/admin/website-settings', label: 'Website Management', icon: Globe },
+      { to: '/admin/provider-commission', label: 'Provider Commission', icon: Percent },
+    ],
+  },
 ];
 
 export function AdminLayout() {

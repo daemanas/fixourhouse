@@ -32,6 +32,18 @@ import {
 import { protect, authorize } from '../middlewares/index.js';
 import { validate } from '../middlewares/validate.js';
 import { updateComplaintValidator } from '../validators/complaintValidator.js';
+import {
+  getAdminWebsiteSettings,
+  updateWebsiteSettings,
+  uploadWebsiteAsset,
+} from '../controllers/websiteSettingsController.js';
+import {
+  getCommissionSettings,
+  updateDefaultCommission,
+  createCommissionOffer,
+  updateCommissionOffer,
+  deleteCommissionOffer,
+} from '../controllers/commissionController.js';
 
 const router = Router();
 
@@ -41,6 +53,15 @@ router.get('/stats', getStats);
 router.get('/analytics', getAnalytics);
 router.get('/analytics/locations', getLocationAnalytics);
 router.get('/revenue', getRevenue);
+
+router.get('/settings/website', getAdminWebsiteSettings);
+router.put('/settings/website', updateWebsiteSettings);
+router.post('/settings/website/assets', uploadWebsiteAsset);
+router.get('/settings/commission', getCommissionSettings);
+router.put('/settings/commission', updateDefaultCommission);
+router.post('/settings/commission/offers', createCommissionOffer);
+router.patch('/settings/commission/offers/:id', updateCommissionOffer);
+router.delete('/settings/commission/offers/:id', deleteCommissionOffer);
 
 router.get('/users', getUsers);
 router.patch('/users/:id/status', updateUserStatus);

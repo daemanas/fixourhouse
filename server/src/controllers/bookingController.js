@@ -4,6 +4,7 @@ import Provider from '../models/Provider.js';
 import Service from '../models/Service.js';
 import Notification from '../models/Notification.js';
 import Payment from '../models/Payment.js';
+import { resolveProviderCommission } from '../utils/commission.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
@@ -278,9 +279,14 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
       throw new ApiError(404, 'Provider not found');
     }
 
-    const providerShare = booking.amount * 0.85;
-    const commission = booking.amount * 0.15;
-    const paidAt = new Date();
+    const commissionRule = await resolveProviderCommission(provider);
+    let commissionRateApplied = commissionRule.rate;
+    let commissionRuleApplied = commissionRule.source;
+    let commissionOfferId = commissionRule.offerId;
+    let commissionOfferName = commissionRule.offerName;
+    let commission = Math.round((booking.amount * commissionRateApplied / 100) * 100) / 100;
+    let providerShare = Math.round((booking.amount - commission) * 100) / 100;
+    let paidAt = new Date();
 
     // Multi-document transactions require a MongoDB replica set (or mongos),
     // which the local standalone MongoDB does not provide — so completion is
@@ -299,6 +305,13 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
           paidAt,
           providerAmount: providerShare,
           commission,
+          commissionRateApplied,
+          commissionAmount: commission,
+          providerEarning: providerShare,
+          platformCommission: commission,
+          commissionRule: commissionRuleApplied,
+          commissionOfferId,
+          commissionOfferName,
         },
       }
     );
@@ -320,8 +333,25 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
           paidAt,
           providerAmount: providerShare,
           commission,
+          commissionRateApplied,
+          commissionAmount: commission,
+          providerEarning: providerShare,
+          platformCommission: commission,
+          commissionRule: commissionRuleApplied,
+          commissionOfferId,
+          commissionOfferName,
         });
         firstCompletion = true;
+      } else {
+        paidAt = existingPayment.paidAt || paidAt;
+        commission = Number.isFinite(Number(existingPayment.commission)) ? existingPayment.commission : commission;
+        providerShare = Number.isFinite(Number(existingPayment.providerAmount))
+          ? existingPayment.providerAmount
+          : Math.round((booking.amount - commission) * 100) / 100;
+        commissionRateApplied = existingPayment.commissionRateApplied ?? commissionRateApplied;
+        commissionRuleApplied = existingPayment.commissionRule || commissionRuleApplied;
+        commissionOfferId = existingPayment.commissionOfferId || commissionOfferId;
+        commissionOfferName = existingPayment.commissionOfferName || commissionOfferName;
       }
     }
 
@@ -342,6 +372,14 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
     // saved atomically with the status update below (single booking.save()).
     booking.paymentMethod = paymentMethod;
     booking.completedAt = paidAt;
+    booking.commission = commission;
+    booking.commissionRateApplied = commissionRateApplied;
+    booking.commissionAmount = commission;
+    booking.providerEarning = providerShare;
+    booking.platformCommission = commission;
+    booking.commissionRule = commissionRuleApplied;
+    booking.commissionOfferId = commissionOfferId;
+    booking.commissionOfferName = commissionOfferName;
     booking.payment = booking.payment || {};
     booking.payment.method = paymentMethod;
     booking.payment.status = 'paid';

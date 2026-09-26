@@ -66,3 +66,13 @@ export const markAllAsRead = asyncHandler(async (req, res) => {
     new ApiResponse(200, {}, 'All notifications marked as read')
   );
 });
+
+// @desc    Permanently clear the current user's notifications
+// @route   DELETE /api/v1/notifications/clear-all
+// @access  Private
+export const clearMyNotifications = asyncHandler(async (req, res) => {
+  const result = await Notification.deleteMany({ userId: req.user._id });
+  res.status(200).json(
+    new ApiResponse(200, { deletedCount: result.deletedCount }, 'Notifications cleared successfully')
+  );
+});

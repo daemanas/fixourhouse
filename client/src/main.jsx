@@ -5,6 +5,8 @@ import { Toaster } from 'react-hot-toast';
 import App from './App';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { WebsiteSettingsProvider } from './context/WebsiteSettingsContext';
+import { NotificationProvider } from './context/NotificationContext';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -12,7 +14,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-          <App />
+          <WebsiteSettingsProvider>
+            <NotificationProvider>
+              <App />
+            </NotificationProvider>
+          </WebsiteSettingsProvider>
           <Toaster
             position="top-right"
             toastOptions={{

@@ -5,17 +5,20 @@ import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import Input from '../../components/ui/Input';
 import Textarea from '../../components/ui/Textarea';
-
-const contactInfo = [
-  { icon: Phone, title: 'Phone', value: '+91 98765 43210', desc: 'Mon-Sat, 9AM-8PM' },
-  { icon: Mail, title: 'Email', value: 'support@localfix.com', desc: 'We reply within 24 hours' },
-  { icon: MapPin, title: 'Office', value: '123, MG Road, Bengaluru', desc: 'Karnataka, India 560001' },
-  { icon: Clock, title: 'Hours', value: '9:00 AM - 8:00 PM', desc: 'Monday to Saturday' },
-];
+import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
 
 export function Contact() {
   const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' });
   const [submitted, setSubmitted] = useState(false);
+  const { settings } = useWebsiteSettings();
+  const contact = settings?.contact || {};
+  const office = [contact.officeAddress, contact.city, contact.state, contact.country, contact.postalCode].filter(Boolean).join(', ');
+  const contactInfo = [
+    { icon: Phone, title: 'Phone', value: contact.phone, desc: contact.whatsapp ? `WhatsApp: ${contact.whatsapp}` : '' },
+    { icon: Mail, title: 'Email', value: contact.supportEmail || contact.officialEmail, desc: contact.supportEmail ? 'Support' : '' },
+    { icon: MapPin, title: 'Office', value: office, href: contact.mapUrl, desc: '' },
+    { icon: Clock, title: 'Hours', value: contact.businessHours, desc: '' },
+  ].filter((item) => item.value);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -53,7 +56,7 @@ export function Contact() {
                     <info.icon className="h-6 w-6 text-white" />
                   </div>
                   <h3 className="font-semibold text-ink-light dark:text-ink-dark">{info.title}</h3>
-                  <p className="mt-1 text-primary-600 dark:text-primary-400 font-medium">{info.value}</p>
+                  {info.href ? <a href={info.href} target="_blank" rel="noreferrer" className="mt-1 block font-medium text-primary-600 hover:underline dark:text-primary-400">{info.value}</a> : <p className="mt-1 font-medium text-primary-600 dark:text-primary-400">{info.value}</p>}
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{info.desc}</p>
                 </Card>
               </motion.div>

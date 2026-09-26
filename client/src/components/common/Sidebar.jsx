@@ -1,13 +1,17 @@
-import { NavLink, useNavigate } from 'react-router-dom';
-import { Wrench, X, LogOut, Sun, Moon } from 'lucide-react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { ChevronDown, X, LogOut, Sun, Moon } from 'lucide-react';
+import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import Avatar from '../ui/Avatar';
+import BrandLockup from './BrandLockup';
 
 export function Sidebar({ items, isOpen, onClose }) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [openGroups, setOpenGroups] = useState({});
 
   const handleLogout = () => {
     logout();
@@ -38,12 +42,7 @@ export function Sidebar({ items, isOpen, onClose }) {
         {/* Logo */}
         <div className="flex items-center justify-between px-6 h-16 border-b border-border-light dark:border-border-dark">
           <NavLink to="/" className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary-600 to-secondary-600 flex items-center justify-center">
-              <Wrench className="h-5 w-5 text-white" />
-            </div>
-            <span className="text-xl font-bold text-ink-light dark:text-ink-dark">
-              Local<span className="text-primary-600 dark:text-primary-400">Fix</span>
-            </span>
+            <BrandLockup textClassName="text-ink-light dark:text-ink-dark" />
           </NavLink>
           <button
             onClick={onClose}
@@ -69,23 +68,21 @@ export function Sidebar({ items, isOpen, onClose }) {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
-          {items.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              onClick={onClose}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-ink-light dark:hover:text-ink-dark'
-                }`
-              }
-            >
-              <item.icon className="h-5 w-5" />
-              {item.label}
-            </NavLink>
-          ))}
+          {items.map((item) => {
+            if (item.children) {
+              const childIsActive = item.children.some((child) => location.pathname === child.to || location.pathname.startsWith(`${child.to}/`));
+              const isExpanded = openGroups[item.label] ?? childIsActive;
+              return (
+                <div key={item.label}>
+                  <button type="button" onClick={() => setOpenGroups((current) => ({ ...current, [item.label]: !isExpanded }))} aria-expanded={isExpanded} className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-medium transition-colors ${childIsActive ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'}`}>
+                    <item.icon className="h-5 w-5" />{item.label}<ChevronDown className={`ml-auto h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                  </button>
+                  {isExpanded && <div className="ml-5 mt-1 space-y-1 border-l border-border-light pl-3 dark:border-border-dark">{item.children.map((child) => <NavLink key={child.to} to={child.to} onClick={onClose} className={({ isActive }) => `flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${isActive ? 'bg-primary-50 font-medium text-primary-600 dark:bg-primary-900/20 dark:text-primary-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'}`}>{child.icon && <child.icon className="h-4 w-4" />}{child.label}</NavLink>)}</div>}
+                </div>
+              );
+            }
+            return <NavLink key={item.to} to={item.to} onClick={onClose} className={({ isActive }) => `flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${isActive ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 hover:text-ink-light dark:hover:text-ink-dark'}`}><item.icon className="h-5 w-5" />{item.label}</NavLink>;
+          })}
         </nav>
 
         {/* Bottom actions */}

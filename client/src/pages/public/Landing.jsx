@@ -22,6 +22,8 @@ import {
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import RatingStars from '../../components/ui/RatingStars';
+import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
+import resolveAssetUrl from '../../utils/assetUrl';
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -118,6 +120,9 @@ const stats = [
 export function Landing() {
   const [searchQuery, setSearchQuery] = useState('');
   const [openFaq, setOpenFaq] = useState(0);
+  const { settings } = useWebsiteSettings();
+  const hero = settings?.hero || {};
+  const managedHero = hero.enabled && Boolean(hero.heading || hero.desktopImageUrl || hero.mobileImageUrl);
 
   return (
     <div>
@@ -132,17 +137,19 @@ export function Landing() {
                 Trusted by 50,000+ happy customers
               </div>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-ink-light dark:text-ink-dark leading-tight">
-                Professional services,
-                <span className="bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
-                  {' '}right at your doorstep.
-                </span>
+                {managedHero && hero.heading ? hero.heading : <>Professional services,<span className="bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">{' '}right at your doorstep.</span></>}
               </h1>
               <p className="mt-6 text-lg text-gray-600 dark:text-gray-300 max-w-lg">
-                Book verified, background-checked professionals for home, beauty, repair and more. Transparent pricing, guaranteed quality.
+                {managedHero && hero.subtitle ? hero.subtitle : 'Book verified, background-checked professionals for home, beauty, repair and more. Transparent pricing, guaranteed quality.'}
               </p>
 
               {/* Search Bar */}
-              <div className="mt-8 max-w-xl">
+              {managedHero && hero.primaryButtonText ? (
+                <div className="mt-8 flex flex-wrap gap-3">
+                  <Link to={hero.primaryButtonAction || '/customer/search'}><Button>{hero.primaryButtonText}</Button></Link>
+                  {hero.secondaryButtonText && <Link to={hero.secondaryButtonAction || '/about'}><Button variant="outline">{hero.secondaryButtonText}</Button></Link>}
+                </div>
+              ) : <div className="mt-8 max-w-xl">
                 <div className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-2xl p-2 shadow-hover border border-border-light dark:border-border-dark">
                   <Search className="h-5 w-5 text-gray-400 ml-3" />
                   <input
@@ -167,7 +174,7 @@ export function Landing() {
                     </Link>
                   ))}
                 </div>
-              </div>
+              </div>}
 
               {/* Trust badges */}
               <div className="mt-8 flex flex-wrap gap-6">
@@ -189,27 +196,36 @@ export function Landing() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="hidden lg:block relative"
+              className="relative mt-10 lg:mt-0"
             >
               <div className="relative rounded-3xl overflow-hidden shadow-2xl">
-                <img
-                  src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&h=600&fit=crop"
-                  alt="Professional service provider"
-                  className="w-full h-[500px] object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-                <div className="absolute bottom-6 left-6 right-6 bg-white/95 dark:bg-gray-900/95 backdrop-blur rounded-2xl p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-ink-light dark:text-ink-dark">Rajesh Kumar</p>
-                      <p className="text-sm text-gray-500">Plumbing Expert</p>
+                {managedHero && (hero.desktopImageUrl || hero.mobileImageUrl) ? (
+                  <picture>
+                    <source media="(max-width: 767px)" srcSet={resolveAssetUrl(hero.mobileImageUrl || hero.desktopImageUrl)} />
+                    <img src={resolveAssetUrl(hero.desktopImageUrl || hero.mobileImageUrl)} alt={hero.heading || 'LocalFix services'} className="block h-auto max-h-[500px] w-full object-contain" />
+                  </picture>
+                ) : (
+                  <>
+                    <img
+                      src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&h=600&fit=crop"
+                      alt="Professional service provider"
+                      className="block h-auto max-h-[500px] w-full object-contain"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                    <div className="absolute bottom-6 left-6 right-6 bg-white/95 dark:bg-gray-900/95 backdrop-blur rounded-2xl p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold text-ink-light dark:text-ink-dark">Rajesh Kumar</p>
+                          <p className="text-sm text-gray-500">Plumbing Expert</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <RatingStars value={5} size="sm" readOnly />
+                          <span className="text-sm font-medium text-ink-light dark:text-ink-dark">4.9</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <RatingStars value={5} size="sm" readOnly />
-                      <span className="text-sm font-medium text-ink-light dark:text-ink-dark">4.9</span>
-                    </div>
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
             </motion.div>
           </div>

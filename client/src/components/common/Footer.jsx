@@ -1,7 +1,21 @@
 import { Link } from 'react-router-dom';
-import { Wrench, Facebook, Twitter, Instagram, Linkedin, Mail, Phone, MapPin } from 'lucide-react';
+import { Facebook, Twitter, Instagram, Linkedin, Mail, Phone, MapPin } from 'lucide-react';
+import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
+import BrandLockup from './BrandLockup';
 
 export function Footer() {
+  const { settings } = useWebsiteSettings();
+  const contact = settings?.contact || {};
+  const social = settings?.social || {};
+  const officeLocation = [contact.officeAddress, contact.city, contact.state, contact.country, contact.postalCode]
+    .filter(Boolean)
+    .join(', ');
+  const socialLinks = [
+    { key: 'facebook', label: 'Facebook', Icon: Facebook },
+    { key: 'twitter', label: 'Twitter', Icon: Twitter },
+    { key: 'instagram', label: 'Instagram', Icon: Instagram },
+    { key: 'linkedin', label: 'LinkedIn', Icon: Linkedin },
+  ].filter((link) => social[link.key]);
   const companyLinks = [
     { to: '/about', label: 'About Us' },
     { to: '/contact', label: 'Contact' },
@@ -34,29 +48,15 @@ export function Footer() {
           {/* Brand */}
           <div>
             <Link to="/" className="flex items-center gap-2">
-              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary-600 to-secondary-600 flex items-center justify-center">
-                <Wrench className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-xl font-bold text-white">
-                Local<span className="text-primary-400">Fix</span>
-              </span>
+              <BrandLockup forceDark textClassName="text-white" />
             </Link>
             <p className="mt-4 text-sm text-gray-400 leading-relaxed">
               Your trusted marketplace for finding and booking verified local service providers. Quality service, guaranteed.
             </p>
             <div className="mt-6 space-y-3">
-              <div className="flex items-center gap-3 text-sm">
-                <Mail className="h-4 w-4 text-primary-400" />
-                <span>support@localfix.com</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <Phone className="h-4 w-4 text-primary-400" />
-                <span>+91 98765 43210</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <MapPin className="h-4 w-4 text-primary-400" />
-                <span>Mumbai, Maharashtra, India</span>
-              </div>
+              {(contact.supportEmail || contact.officialEmail) && <a href={`mailto:${contact.supportEmail || contact.officialEmail}`} className="flex items-center gap-3 text-sm hover:text-white"><Mail className="h-4 w-4 text-primary-400" />{contact.supportEmail || contact.officialEmail}</a>}
+              {contact.phone && <a href={`tel:${contact.phone}`} className="flex items-center gap-3 text-sm hover:text-white"><Phone className="h-4 w-4 text-primary-400" />{contact.phone}</a>}
+              {officeLocation && <div className="flex items-center gap-3 text-sm"><MapPin className="h-4 w-4 shrink-0 text-primary-400" /><span>{officeLocation}</span></div>}
             </div>
           </div>
 
@@ -109,22 +109,9 @@ export function Footer() {
         {/* Social + Bottom */}
         <div className="mt-12 pt-8 border-t border-gray-800">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-            <p className="text-sm text-gray-500">
-              © {new Date().getFullYear()} LocalFix. All rights reserved.
-            </p>
+            <p className="text-sm text-gray-500">© {new Date().getFullYear()} {settings?.siteName || 'LocalFix'}. All rights reserved.</p>
             <div className="flex items-center gap-4">
-              <a href="#" className="p-2 rounded-lg hover:bg-gray-800 transition-colors" aria-label="Facebook">
-                <Facebook className="h-5 w-5" />
-              </a>
-              <a href="#" className="p-2 rounded-lg hover:bg-gray-800 transition-colors" aria-label="Twitter">
-                <Twitter className="h-5 w-5" />
-              </a>
-              <a href="#" className="p-2 rounded-lg hover:bg-gray-800 transition-colors" aria-label="Instagram">
-                <Instagram className="h-5 w-5" />
-              </a>
-              <a href="#" className="p-2 rounded-lg hover:bg-gray-800 transition-colors" aria-label="LinkedIn">
-                <Linkedin className="h-5 w-5" />
-              </a>
+              {socialLinks.map(({ key, label, Icon }) => <a key={key} href={social[key]} target="_blank" rel="noreferrer" className="p-2 rounded-lg hover:bg-gray-800 transition-colors" aria-label={label}><Icon className="h-5 w-5" /></a>)}
             </div>
           </div>
         </div>

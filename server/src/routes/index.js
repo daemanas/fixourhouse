@@ -13,6 +13,7 @@ import complaintRoutes from './complaintRoutes.js';
 import withdrawalRoutes from './withdrawalRoutes.js';
 import galleryRoutes from './galleryRoutes.js';
 import locationRoutes from './locationRoutes.js';
+import settingsRoutes from './settingsRoutes.js';
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use('/provider/gallery', galleryRoutes);
 router.use('/admin', adminRoutes);
 router.use('/complaints', complaintRoutes);
 router.use('/locations', locationRoutes);
+router.use('/settings', settingsRoutes);
 
 export default router;

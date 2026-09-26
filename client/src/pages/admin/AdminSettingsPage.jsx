@@ -1,26 +1,16 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import toast from 'react-hot-toast';
-import { Save, Shield, Percent, Bell, Globe } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, Shield, Bell, Globe, Percent } from 'lucide-react';
 import Card from '../../components/ui/Card';
-import Button from '../../components/ui/Button';
-import Input from '../../components/ui/Input';
-import Select from '../../components/ui/Select';
 
 export function AdminSettingsPage() {
-  const [commissionRate, setCommissionRate] = useState('20');
-  const [currency, setCurrency] = useState('INR');
-  const [supportEmail, setSupportEmail] = useState('support@localfix.com');
   const [notifications, setNotifications] = useState({
     newProvider: true,
     newReport: true,
     newWithdrawal: true,
     systemAlerts: true,
   });
-
-  const handleSave = () => {
-    toast.success('Settings saved successfully');
-  };
 
   const toggleNotification = (key) => {
     setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -35,89 +25,22 @@ export function AdminSettingsPage() {
         </p>
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-      >
-        <Card className="p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Percent className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-ink-light dark:text-ink-dark">
-                Commission Settings
-              </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Configure platform commission and currency
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Commission Rate (%)
-              </label>
-              <Input
-                type="number"
-                value={commissionRate}
-                onChange={(e) => setCommissionRate(e.target.value)}
-                placeholder="20"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Currency
-              </label>
-              <Select
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                options={[
-                  { value: 'INR', label: 'INR (₹)' },
-                  { value: 'USD', label: 'USD ($)' },
-                  { value: 'EUR', label: 'EUR (€)' },
-                ]}
-              />
-            </div>
-          </div>
-        </Card>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.1 }}
-      >
-        <Card className="p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="h-10 w-10 rounded-xl bg-secondary/10 flex items-center justify-center">
-              <Globe className="h-5 w-5 text-secondary" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-ink-light dark:text-ink-dark">
-                Platform Settings
-              </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                General platform configuration
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Support Email
-              </label>
-              <Input
-                type="email"
-                value={supportEmail}
-                onChange={(e) => setSupportEmail(e.target.value)}
-                placeholder="support@localfix.com"
-              />
-            </div>
-          </div>
-        </Card>
-      </motion.div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Link to="/admin/website-settings" className="group">
+          <Card className="flex h-full items-center gap-4 p-5 transition-colors group-hover:border-primary-300 dark:group-hover:border-primary-700">
+            <Globe className="h-6 w-6 shrink-0 text-primary-600 dark:text-primary-400" />
+            <span className="min-w-0 flex-1"><span className="block font-semibold text-ink-light dark:text-ink-dark">Website Management</span><span className="mt-1 block text-sm text-gray-500">Branding, homepage banner and public contact details</span></span>
+            <ArrowRight className="h-4 w-4 text-gray-400 transition-transform group-hover:translate-x-1" />
+          </Card>
+        </Link>
+        <Link to="/admin/provider-commission" className="group">
+          <Card className="flex h-full items-center gap-4 p-5 transition-colors group-hover:border-primary-300 dark:group-hover:border-primary-700">
+            <Percent className="h-6 w-6 shrink-0 text-primary-600 dark:text-primary-400" />
+            <span className="min-w-0 flex-1"><span className="block font-semibold text-ink-light dark:text-ink-dark">Provider Commission</span><span className="mt-1 block text-sm text-gray-500">Default rate and time-limited commission offers</span></span>
+            <ArrowRight className="h-4 w-4 text-gray-400 transition-transform group-hover:translate-x-1" />
+          </Card>
+        </Link>
+      </div>
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -224,12 +147,6 @@ export function AdminSettingsPage() {
         </Card>
       </motion.div>
 
-      <div className="flex justify-end">
-        <Button onClick={handleSave}>
-          <Save className="h-4 w-4" />
-          Save Settings
-        </Button>
-      </div>
     </div>
   );
 }

@@ -1,4 +1,6 @@
 import LegalLayout from '../../components/common/LegalLayout';
+import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
+import { withDynamicContact } from '../../utils/websiteContent';
 
 const sections = [
   {
@@ -75,12 +77,13 @@ const sections = [
 ];
 
 export function RefundPolicy() {
+  const { settings } = useWebsiteSettings();
   return (
     <LegalLayout
       title="Refund Policy"
       subtitle="Our commitment to fair and transparent refunds."
       updated="August 1, 2026"
-      sections={sections}
+      sections={withDynamicContact(sections, settings)}
     />
   );
 }

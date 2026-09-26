@@ -63,6 +63,8 @@ const AdminRevenuePage = lazy(() => import('./pages/admin/AdminRevenuePage'));
 const AdminCustomersPage = lazy(() => import('./pages/admin/AdminCustomersPage'));
 const AdminCustomerDetailPage = lazy(() => import('./pages/admin/AdminCustomerDetailPage'));
 const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'));
+const AdminWebsiteSettingsPage = lazy(() => import('./pages/admin/AdminWebsiteSettingsPage'));
+const AdminProviderCommissionPage = lazy(() => import('./pages/admin/AdminProviderCommissionPage'));
 
 // Layouts
 const PublicLayout = lazy(() => import('./layouts/PublicLayout'));
@@ -136,6 +138,7 @@ function App() {
           <Route path="/provider/withdrawals" element={<ProviderWithdrawalsPage />} />
           <Route path="/provider/reviews" element={<ProviderReviewsPage />} />
           <Route path="/provider/settings" element={<ProviderSettingsPage />} />
+          <Route path="/provider/notifications" element={<NotificationsPage />} />
         </Route>
 
         {/* Admin routes */}
@@ -154,6 +157,9 @@ function App() {
           <Route path="/admin/complaints/:id" element={<AdminComplaintDetailPage />} />
           <Route path="/admin/revenue" element={<AdminRevenuePage />} />
           <Route path="/admin/settings" element={<AdminSettingsPage />} />
+          <Route path="/admin/website-settings" element={<AdminWebsiteSettingsPage />} />
+          <Route path="/admin/provider-commission" element={<AdminProviderCommissionPage />} />
+          <Route path="/admin/notifications" element={<NotificationsPage />} />
         </Route>
 
         {/* 404 */}

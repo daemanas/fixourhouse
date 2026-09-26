@@ -1,4 +1,6 @@
 import LegalLayout from '../../components/common/LegalLayout';
+import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
+import { withDynamicContact } from '../../utils/websiteContent';
 
 const sections = [
   {
@@ -98,12 +100,13 @@ const sections = [
 ];
 
 export function PrivacyPolicy() {
+  const { settings } = useWebsiteSettings();
   return (
     <LegalLayout
       title="Privacy Policy"
       subtitle="How we collect, use, and protect your personal information."
       updated="August 1, 2026"
-      sections={sections}
+      sections={withDynamicContact(sections, settings)}
     />
   );
 }

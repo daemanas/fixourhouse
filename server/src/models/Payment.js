@@ -27,6 +27,13 @@ const paymentSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    commissionRateApplied: { type: Number, min: 0, max: 100, default: null },
+    commissionAmount: { type: Number, min: 0, default: null },
+    providerEarning: { type: Number, min: 0, default: null },
+    platformCommission: { type: Number, min: 0, default: null },
+    commissionRule: { type: String, enum: ['default', 'offer'], default: null },
+    commissionOfferId: { type: mongoose.Schema.Types.ObjectId, ref: 'CommissionOffer', default: null },
+    commissionOfferName: { type: String, default: '' },
     providerAmount: {
       type: Number,
       default: 0,

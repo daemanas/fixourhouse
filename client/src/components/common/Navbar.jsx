@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { Menu, X, Wrench, Sun, Moon, LogOut, LayoutDashboard } from 'lucide-react';
+import { Menu, X, Sun, Moon, LogOut, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import BrandLockup from './BrandLockup';
 import Button from '../ui/Button';
 import Avatar from '../ui/Avatar';
 
@@ -49,12 +50,7 @@ export function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary-600 to-secondary-600 flex items-center justify-center">
-              <Wrench className="h-5 w-5 text-white" />
-            </div>
-            <span className="text-xl font-bold text-ink-light dark:text-ink-dark">
-              Local<span className="text-primary-600 dark:text-primary-400">Fix</span>
-            </span>
+            <BrandLockup textClassName="text-ink-light dark:text-ink-dark" />
           </Link>
 
           {/* Desktop Nav */}

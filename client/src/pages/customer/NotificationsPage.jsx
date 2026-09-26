@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
@@ -19,7 +19,7 @@ import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
-import { getMyNotifications, markAsRead, markAllAsRead } from '../../services/notificationService';
+import { useNotifications } from '../../context/NotificationContext';
 
 const typeConfig = {
   booking: { icon: Calendar, color: 'primary' },
@@ -56,30 +56,9 @@ const formatTime = (dateStr) => {
 };
 
 export function NotificationsPage() {
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { notifications, unreadCount, loading, error, refresh, markRead, markAllRead, clearAll } = useNotifications();
   const [filter, setFilter] = useState('all');
   const [clearing, setClearing] = useState(false);
-
-  const fetchNotifications = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await getMyNotifications({ limit: 50 });
-      setNotifications(res.data?.data?.notifications || []);
-      setUnreadCount(res.data?.data?.unreadCount || 0);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load notifications. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
 
   const filteredNotifications = notifications.filter((n) => {
     if (filter === 'all') return true;
@@ -89,9 +68,7 @@ export function NotificationsPage() {
 
   const handleMarkAllRead = async () => {
     try {
-      await markAllAsRead();
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-      setUnreadCount(0);
+      await markAllRead();
       toast.success('All notifications marked as read');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to mark all as read');
@@ -100,11 +77,7 @@ export function NotificationsPage() {
 
   const handleMarkAsRead = async (id) => {
     try {
-      await markAsRead(id);
-      setNotifications((prev) =>
-        prev.map((n) => (n._id === id ? { ...n, read: true } : n))
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
+      await markRead(id);
     } catch (err) {
       // Silently ignore - notification still shows
     }
@@ -113,10 +86,7 @@ export function NotificationsPage() {
   const handleClearAll = async () => {
     setClearing(true);
     try {
-      // Mark all as read (no delete endpoint exists)
-      await markAllAsRead();
-      setNotifications([]);
-      setUnreadCount(0);
+      await clearAll();
       toast.success('All notifications cleared');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to clear notifications');
@@ -191,7 +161,7 @@ export function NotificationsPage() {
         <Card className="p-8 text-center">
           <AlertTriangle className="h-10 w-10 text-danger-500 mx-auto mb-3" />
           <p className="text-red-500 font-medium">{error}</p>
-          <Button variant="outline" className="mt-4" onClick={fetchNotifications}>
+          <Button variant="outline" className="mt-4" onClick={refresh}>
             Try Again
           </Button>
         </Card>

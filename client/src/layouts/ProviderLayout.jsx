@@ -11,6 +11,7 @@ import {
   Wallet,
   Star,
   Settings,
+  Bell,
 } from 'lucide-react';
 
 const items = [
@@ -26,6 +27,7 @@ const items = [
   { to: '/provider/earnings', label: 'Earnings', icon: Wallet },
   { to: '/provider/withdrawals', label: 'Withdrawals', icon: Wallet },
   { to: '/provider/reviews', label: 'Reviews', icon: Star },
+  { to: '/provider/notifications', label: 'Notifications', icon: Bell },
   { to: '/provider/settings', label: 'Settings', icon: Settings },
 ];
 
