@@ -34,6 +34,15 @@ const TIME_SLOTS = [
   '04:00 PM', '05:00 PM', '06:00 PM', '07:00 PM',
 ];
 
+const toApiTime = (displayTime) => {
+  const match = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(displayTime);
+  if (!match) return displayTime;
+
+  let hour = Number(match[1]) % 12;
+  if (match[3].toUpperCase() === 'PM') hour += 12;
+  return `${String(hour).padStart(2, '0')}:${match[2]}`;
+};
+
 export function ServiceDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -106,7 +115,7 @@ export function ServiceDetailPage() {
         providerId: selectedProvider.provider._id,
         serviceId: selectedProvider.serviceId || data.service._id,
         scheduledDate: new Date(selectedDate).toISOString(),
-        scheduledTime: selectedTime,
+        scheduledTime: toApiTime(selectedTime),
         address,
         notes: notes || undefined,
         paymentMethod,

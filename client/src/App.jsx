@@ -24,6 +24,7 @@ const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'));
 
 // Customer pages
 const CustomerDashboard = lazy(() => import('./pages/customer/CustomerDashboard'));
+const CustomerServicesPage = lazy(() => import('./pages/customer/CustomerServicesPage'));
 const SearchPage = lazy(() => import('./pages/customer/SearchPage'));
 const ServiceDetailPage = lazy(() => import('./pages/customer/ServiceDetailPage'));
 const ProviderProfilePage = lazy(() => import('./pages/customer/ProviderProfilePage'));
@@ -114,6 +115,7 @@ function App() {
         {/* Customer routes */}
         <Route element={<ProtectedRoute roles={[env.ROLES.CUSTOMER]}><CustomerLayout /></ProtectedRoute>}>
           <Route path="/customer/dashboard" element={<CustomerDashboard />} />
+          <Route path="/customer/services" element={<CustomerServicesPage />} />
           <Route path="/customer/search" element={<SearchPage />} />
           <Route path="/customer/service/:id" element={<ServiceDetailPage />} />
           <Route path="/customer/provider/:id" element={<ProviderProfilePage />} />

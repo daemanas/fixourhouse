@@ -64,7 +64,7 @@ export const createBooking = asyncHandler(async (req, res) => {
     providerId,
     scheduledDate: new Date(scheduledDate).toISOString().split('T')[0],
     scheduledTime,
-    status: { '': ['pending', 'accepted', 'working'] }
+    status: { $in: ['pending', 'accepted', 'working'] },
   });
   
   if (conflict) {
@@ -159,7 +159,10 @@ export const getMyBookings = asyncHandler(async (req, res) => {
         select: 'businessName location',
         populate: { path: 'userId', select: 'name phone avatar' },
       })
-      .populate('serviceId', 'name price'),
+      .populate(
+        'serviceId',
+        'name price startingPrice primaryImage image images durationMinutes duration discountPercentage serviceTypeId serviceCategoryId categoryId'
+      ),
     Booking.countDocuments(filter),
   ]);
 

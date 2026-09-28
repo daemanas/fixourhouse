@@ -2,6 +2,7 @@ import DashboardLayout from './DashboardLayout';
 import {
   LayoutDashboard,
   Search,
+  Wrench,
   CalendarCheck,
   MessageSquareWarning,
   Heart,
@@ -12,6 +13,7 @@ import {
 
 const items = [
   { to: '/customer/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/customer/services', label: 'Services', icon: Wrench },
   { to: '/customer/search', label: 'Search Services', icon: Search },
   { to: '/customer/bookings', label: 'My Bookings', icon: CalendarCheck },
   { to: '/customer/complaints', label: 'My Complaints', icon: MessageSquareWarning },

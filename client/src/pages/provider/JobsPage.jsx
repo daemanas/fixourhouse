@@ -1,16 +1,28 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
+  ArrowRight,
+  Bell,
+  CalendarDays,
   MapPin,
   Calendar,
-  Clock,
+  ChevronDown,
+  Check,
   IndianRupee,
+  ListFilter,
+  MoreHorizontal,
+  Search,
   Play,
   CheckCircle2,
   Phone,
   MessageSquare,
   Loader2,
+  LayoutGrid,
+  SlidersHorizontal,
+  Wrench,
+  Zap,
   CreditCard,
   Banknote,
   Upload,
@@ -25,22 +37,23 @@ import Input from '../../components/ui/Input';
 import Modal from '../../components/ui/Modal';
 import Avatar from '../../components/ui/Avatar';
 import ImageUploadField from '../../components/ui/ImageUploadField';
+import resolveAssetUrl from '../../utils/assetUrl';
 import { getMyBookings, updateBookingStatus } from '../../services/bookingService';
 import { uploadCompletedServicePhotos } from '../../services/completedPhotoService';
 
 const statusConfig = {
   accepted: { label: 'Accepted', color: 'primary' },
-  working: { label: 'Working', color: 'secondary' },
+  working: { label: 'Working', color: 'warning' },
   completed: { label: 'Completed', color: 'success' },
   cancelled: { label: 'Cancelled', color: 'danger' },
   rejected: { label: 'Rejected', color: 'danger' },
 };
 
 const tabs = [
-  { key: 'all', label: 'All Jobs' },
-  { key: 'accepted', label: 'Accepted' },
-  { key: 'working', label: 'Working' },
-  { key: 'completed', label: 'Completed' },
+  { key: 'all', label: 'All', icon: ListFilter },
+  { key: 'accepted', label: 'Accepted', icon: CalendarDays },
+  { key: 'working', label: 'Working', icon: Zap },
+  { key: 'completed', label: 'Completed', icon: Check },
 ];
 
 const paymentMethods = [
@@ -64,8 +77,33 @@ const formatDateTime = (dateStr) => {
   });
 };
 
+function JobServiceImage({ service }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const source = service?.primaryImage || service?.image || service?.images?.[0] || '';
+  const imageUrl = source ? resolveAssetUrl(source) : '';
+
+  return imageUrl && !imageFailed ? (
+    <img
+      src={imageUrl}
+      alt=""
+      loading="lazy"
+      onError={() => setImageFailed(true)}
+      className="h-full w-full object-cover"
+    />
+  ) : (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400">
+      <Wrench className="h-7 w-7" aria-hidden="true" />
+      <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">LocalFix</span>
+    </div>
+  );
+}
+
 export function JobsPage() {
   const [activeTab, setActiveTab] = useState('all');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateFilter, setDateFilter] = useState('all');
+  const [serviceTypeFilter, setServiceTypeFilter] = useState('all');
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -138,7 +176,48 @@ export function JobsPage() {
     fetchJobs();
   }, [fetchJobs]);
 
-  const filteredJobs = activeTab === 'all' ? jobs : jobs.filter((j) => j.status === activeTab);
+  const serviceTypeOptions = [...new Set(jobs.map((job) => {
+    const service = job.serviceId;
+    const serviceType = service?.serviceType || job.serviceType || service?.serviceTypeId;
+    return typeof serviceType === 'object' ? serviceType?.name : serviceType;
+  }).filter(Boolean))];
+
+  const filteredJobs = jobs.filter((job) => {
+    if (activeTab !== 'all' && job.status !== activeTab) return false;
+
+    const normalizedSearch = searchTerm.trim().toLocaleLowerCase();
+    if (normalizedSearch) {
+      const searchableText = [
+        job.serviceId?.name,
+        job.customerId?.name,
+        job.address?.line1,
+        job.address?.city,
+        job.address?.state,
+      ].filter(Boolean).join(' ').toLocaleLowerCase();
+      if (!searchableText.includes(normalizedSearch)) return false;
+    }
+
+    if (serviceTypeFilter !== 'all') {
+      const service = job.serviceId;
+      const serviceType = service?.serviceType || job.serviceType || service?.serviceTypeId;
+      const serviceTypeName = typeof serviceType === 'object' ? serviceType?.name : serviceType;
+      if (serviceTypeName !== serviceTypeFilter) return false;
+    }
+
+    if (dateFilter !== 'all' && job.scheduledDate) {
+      const scheduled = new Date(job.scheduledDate);
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      if (dateFilter === 'today' && (scheduled < todayStart || scheduled >= tomorrowStart)) return false;
+      if (dateFilter === 'upcoming' && scheduled < todayStart) return false;
+      if (dateFilter === 'past' && scheduled >= todayStart) return false;
+    } else if (dateFilter !== 'all' && !job.scheduledDate) {
+      return false;
+    }
+
+    return true;
+  });
 
   const openCompleteModal = (job) => {
     setCompleteModalJob(job);
@@ -161,8 +240,7 @@ export function JobsPage() {
 
     setCompleteLoading(true);
     try {
-      const res = await updateBookingStatus(completeModalJob._id, {
-        status: 'completed',
+      const res = await updateBookingStatus(completeModalJob._id, 'completed', {
         paymentMethod: selectedPaymentMethod,
       });
       const updatedBooking = res.data?.data?.booking;
@@ -215,8 +293,7 @@ export function JobsPage() {
     setVerifyLoading(true);
     setVerifyError(null);
     try {
-      await updateBookingStatus(startModalJob._id, {
-        status: 'working',
+      await updateBookingStatus(startModalJob._id, 'working', {
         bookingId: enteredBookingId,
       });
       toast.success('Job started');
@@ -236,8 +313,28 @@ export function JobsPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+      <div className="mx-auto w-full max-w-6xl space-y-4" aria-label="Loading jobs">
+        <div className="h-9 w-44 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-800" />
+        <div className="h-5 w-72 max-w-full animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+        <div className="flex gap-2 overflow-hidden py-2">
+          {[0, 1, 2, 3].map((item) => (
+            <div key={item} className="h-12 w-36 shrink-0 animate-pulse rounded-xl bg-gray-200 dark:bg-gray-800" />
+          ))}
+        </div>
+        {[0, 1, 2].map((item) => (
+          <div key={item} className="flex gap-3 rounded-2xl border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-card-dark sm:gap-4 sm:p-4">
+            <div className="h-28 w-24 shrink-0 animate-pulse rounded-xl bg-gray-200 dark:bg-gray-800 sm:h-32 sm:w-32" />
+            <div className="min-w-0 flex-1 space-y-3 py-1">
+              <div className="h-5 w-2/3 animate-pulse rounded bg-gray-200 dark:bg-gray-800" />
+              <div className="h-4 w-1/2 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+              <div className="h-4 w-3/4 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+              <div className="flex gap-2 pt-1">
+                <div className="h-9 w-24 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+                <div className="h-9 w-28 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
@@ -256,165 +353,266 @@ export function JobsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-ink-light dark:text-ink-dark">My Jobs</h1>
-        <p className="mt-1 text-gray-500 dark:text-gray-400">
-          Manage your current and completed jobs
-        </p>
+    <div className="mx-auto w-full min-w-0 max-w-6xl space-y-5 overflow-x-hidden sm:space-y-6">
+      <header className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold leading-tight text-ink-light dark:text-ink-dark sm:text-3xl">My Jobs</h1>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Manage your service jobs and track progress</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setSearchOpen((value) => !value)}
+            aria-label={searchOpen ? 'Close job search' : 'Search jobs'}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-primary-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-primary-400"
+          >
+            <Search className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <Link
+            to="/provider/notifications"
+            aria-label="Notifications"
+            className="relative flex h-10 w-10 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-primary-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-primary-400"
+          >
+            <Bell className="h-5 w-5" aria-hidden="true" />
+          </Link>
+        </div>
+      </header>
+
+      {searchOpen && (
+        <label className="relative block">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search service, customer or location"
+            aria-label="Search jobs"
+            className="input h-11 rounded-xl pl-10 text-sm"
+          />
+        </label>
+      )}
+
+      <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex w-max min-w-full gap-2">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const count = tab.key === 'all' ? jobs.length : jobs.filter((job) => job.status === tab.key).length;
+            const active = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                aria-pressed={active}
+                className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition-colors sm:min-h-12 sm:px-4 ${active
+                  ? 'bg-primary-700 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
+                  }`}
+              >
+                <Icon className="h-4 w-4" aria-hidden="true" />
+                {tab.label}
+                <span className={`flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-xs ${active ? 'bg-white/20 text-white' : 'bg-white text-gray-600 dark:bg-gray-700 dark:text-gray-200'}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${activeTab === tab.key
-                ? 'bg-primary-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-              }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex w-max gap-2.5">
+          <label className="relative flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-card-dark dark:text-gray-300">
+            <CalendarDays className="h-4 w-4 text-gray-500" aria-hidden="true" />
+            <span className="text-xs font-medium">Date</span>
+            <select
+              value={dateFilter}
+              onChange={(event) => setDateFilter(event.target.value)}
+              aria-label="Filter jobs by date"
+              className="absolute inset-0 cursor-pointer opacity-0"
+            >
+              <option value="all">All dates</option>
+              <option value="today">Today</option>
+              <option value="upcoming">Upcoming</option>
+              <option value="past">Past</option>
+            </select>
+            <ChevronDown className="h-4 w-4" aria-hidden="true" />
+          </label>
+
+          <label className={`relative flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-card-dark dark:text-gray-300 ${serviceTypeOptions.length === 0 ? 'opacity-60' : ''}`}>
+            <LayoutGrid className="h-4 w-4 text-gray-500" aria-hidden="true" />
+            <span className="text-xs font-medium">Service Type</span>
+            <select
+              value={serviceTypeFilter}
+              onChange={(event) => setServiceTypeFilter(event.target.value)}
+              aria-label="Filter jobs by service type"
+              disabled={serviceTypeOptions.length === 0}
+              className="absolute inset-0 cursor-pointer opacity-0"
+            >
+              <option value="all">All service types</option>
+              {serviceTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
+            </select>
+            <ChevronDown className="h-4 w-4" aria-hidden="true" />
+          </label>
+
+          <label className="relative flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-card-dark dark:text-gray-300">
+            <SlidersHorizontal className="h-4 w-4 text-gray-500" aria-hidden="true" />
+            <span className="text-xs font-medium">Status</span>
+            <select
+              value={activeTab}
+              onChange={(event) => setActiveTab(event.target.value)}
+              aria-label="Filter jobs by status"
+              className="absolute inset-0 cursor-pointer opacity-0"
+            >
+              {tabs.map((tab) => <option key={tab.key} value={tab.key}>{tab.label}</option>)}
+            </select>
+            <ChevronDown className="h-4 w-4" aria-hidden="true" />
+          </label>
+        </div>
       </div>
 
       {filteredJobs.length === 0 ? (
         <EmptyState
-          icon={MessageSquare}
+          icon={Wrench}
           title="No jobs found"
-          description="Jobs in this category will appear here."
+          description="Jobs in this view will appear here."
         />
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           {filteredJobs.map((job, index) => {
             const customer = job.customerId;
             const customerName = customer?.name || 'Customer';
             const customerAvatar = customer?.avatar;
             const customerPhone = customer?.phone;
-            const service = job.serviceId;
-            const locationStr = [
-              job.address?.line1,
-              job.address?.city,
-              job.address?.state,
-            ].filter(Boolean).join(', ');
+            const service = job.serviceId || job.serviceSnapshot || {};
+            const locationStr = [job.address?.line1, job.address?.city, job.address?.state].filter(Boolean).join(', ');
             const scheduledDate = job.scheduledDate
-              ? new Date(job.scheduledDate).toLocaleDateString('en-IN', {
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric',
-              })
-              : '—';
+              ? new Date(job.scheduledDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+              : null;
+            const scheduledTime = job.scheduledTime || job.timeSlot;
             const statusInfo = statusConfig[job.status] || { label: job.status, color: 'primary' };
 
             return (
               <motion.div
                 key={job._id}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: index * 0.1 }}
+                transition={{ duration: 0.2, delay: Math.min(index * 0.04, 0.2) }}
               >
-                <Card className="p-6">
-                  <div className="flex flex-col lg:flex-row lg:items-center gap-6">
-                    <div className="flex items-center gap-4 flex-1">
-                      <Avatar
-                        src={customerAvatar}
-                        name={customerName}
-                        size="md"
-                      />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-ink-light dark:text-ink-dark">
-                            {customerName}
-                          </h3>
-                          <Badge variant={statusInfo.color}>
+                <Card className="overflow-hidden rounded-2xl p-3 shadow-sm transition-shadow hover:shadow-md sm:p-4">
+                  <div className="flex min-w-0 gap-3 sm:gap-4">
+                    <div className="h-[150px] w-[clamp(120px,36vw,140px)] shrink-0 overflow-hidden rounded-xl bg-gray-100 dark:bg-gray-800 sm:h-[160px] sm:w-[140px] lg:h-36 lg:w-36">
+                      <JobServiceImage service={service} />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h2 className="line-clamp-2 text-sm font-bold leading-5 text-ink-light dark:text-ink-dark sm:text-base">
+                            {service?.name || 'Service'}
+                          </h2>
+                          <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+                            <Avatar src={customerAvatar} name={customerName} size="xs" />
+                            <span className="truncate">{customerName}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                          <Badge variant={statusInfo.color} className="whitespace-nowrap px-2 py-1 text-[10px] sm:text-xs">
                             {statusInfo.label}
                           </Badge>
-                        </div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {service?.name || 'Service'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-1">
-                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                        <MapPin className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{locationStr || 'Address not provided'}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                        <Calendar className="h-4 w-4 shrink-0" />
-                        {scheduledDate}
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                        <Phone className="h-4 w-4 shrink-0" />
-                        {customerPhone || '—'}
-                      </div>
-                      <div className="flex items-center gap-2 text-sm font-semibold text-ink-light dark:text-ink-dark">
-                        <IndianRupee className="h-4 w-4 shrink-0" />
-                        {job.amount ?? 0}
-                      </div>
-                      {job.status === 'completed' && (
-                        <>
-                          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                            <Wallet className="h-4 w-4 shrink-0" />
-                            <span className="truncate">
-                              Payment: {paymentLabels[job.paymentMethod] || '—'}
+                          {job.amount !== undefined && job.amount !== null && (
+                            <span className="inline-flex items-center text-sm font-bold text-primary-800 dark:text-primary-300 sm:text-base">
+                              <IndianRupee className="h-3.5 w-3.5" aria-hidden="true" />
+                              {Number(job.amount).toLocaleString('en-IN')}
                             </span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                            <Clock className="h-4 w-4 shrink-0" />
-                            <span className="truncate">
-                              Completed: {formatDateTime(job.completedAt)}
-                            </span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      {job.status === 'accepted' && (
-                        <Button
-                          variant="primary"
-                          onClick={() => openStartModal(job)}
-                          disabled={actionLoading === job._id}
-                        >
-                          {actionLoading === job._id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Play className="h-4 w-4" />
                           )}
-                          Start Job
-                        </Button>
-                      )}
-                      {job.status === 'working' && (
-                        <Button
-                          variant="success"
-                          onClick={() => openCompleteModal(job)}
-                          disabled={actionLoading === job._id}
-                        >
-                          <CheckCircle2 className="h-4 w-4" />
-                          Complete Job
-                        </Button>
-                      )}
-                      {job.status === 'completed' && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                            <Clock className="h-4 w-4" />
-                            Completed
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openPhotoModal(job)}
-                          >
-                            <Camera className="h-4 w-4" />
-                            Add Work Photos
-                          </Button>
+                          <ArrowRight className="hidden h-4 w-4 text-gray-400 sm:block" aria-hidden="true" />
                         </div>
-                      )}
+                      </div>
+
+                      <div className="mt-2.5 space-y-1.5">
+                        {locationStr && (
+                          <p className="flex min-w-0 items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                            <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            <span className="truncate">{locationStr}</span>
+                          </p>
+                        )}
+                        {(scheduledDate || scheduledTime) && (
+                          <p className="flex min-w-0 items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                            <Calendar className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            <span className="truncate">{[scheduledDate, scheduledTime].filter(Boolean).join(' · ')}</span>
+                          </p>
+                        )}
+                        {job.status === 'completed' && (job.paymentMethod || job.completedAt) && (
+                          <p className="flex min-w-0 items-center gap-1.5 text-[11px] text-gray-400">
+                            <Wallet className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            <span className="truncate">
+                              {[paymentLabels[job.paymentMethod], job.completedAt && `Completed ${formatDateTime(job.completedAt)}`].filter(Boolean).join(' · ')}
+                            </span>
+                          </p>
+                        )}
+                      </div>
                     </div>
+                  </div>
+
+                  <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 border-t border-gray-100 pt-3 dark:border-gray-800">
+                    {customerPhone && (
+                      <a
+                        href={`tel:${customerPhone}`}
+                        className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-primary-50 px-3 text-xs font-semibold text-primary-800 transition hover:bg-primary-100 dark:bg-primary-900/20 dark:text-primary-300 dark:hover:bg-primary-900/40"
+                      >
+                        <Phone className="h-3.5 w-3.5" aria-hidden="true" /> Contact
+                      </a>
+                    )}
+
+                    {job.status === 'accepted' && (
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => openStartModal(job)}
+                        disabled={actionLoading === job._id}
+                        className="min-h-9 rounded-lg px-3"
+                      >
+                        {actionLoading === job._id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                        Start Job
+                      </Button>
+                    )}
+                    {job.status === 'working' && (
+                      <Button
+                        size="sm"
+                        variant="success"
+                        onClick={() => openCompleteModal(job)}
+                        disabled={actionLoading === job._id}
+                        className="min-h-9 rounded-lg px-3"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Complete Job
+                      </Button>
+                    )}
+                    {job.status === 'completed' && (
+                      <>
+                        <span className="inline-flex min-h-9 items-center gap-1 rounded-lg bg-success-50 px-2.5 text-xs font-semibold text-success-700 dark:bg-success-900/20 dark:text-success-300">
+                          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Completed
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openPhotoModal(job)}
+                          className="min-h-9 rounded-lg px-3"
+                        >
+                          <Camera className="h-3.5 w-3.5" /> Photos
+                        </Button>
+                      </>
+                    )}
+
+                    <button
+                      type="button"
+                      aria-label="More job actions"
+                      title="More job actions"
+                      className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                    >
+                      <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+                    </button>
                   </div>
                 </Card>
               </motion.div>

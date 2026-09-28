@@ -10,4 +10,10 @@ export const getMyBookings = (params = {}) => api.get('/bookings/me', { params }
 export const getBookingById = (id) => api.get(`/bookings/${id}`);
 
 // Update booking status (accept/reject/working/completed/cancel)
-export const updateBookingStatus = (id, data) => api.patch(`/bookings/${id}/status`, data);
+export const updateBookingStatus = (id, status, details = {}) => {
+	if (typeof status !== 'string') {
+		throw new TypeError('Booking status must be a string.');
+	}
+
+	return api.patch(`/bookings/${id}/status`, { ...details, status });
+};

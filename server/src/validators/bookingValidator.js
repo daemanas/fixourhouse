@@ -26,7 +26,7 @@ export const createBookingValidator = Joi.object({
       pincode: Joi.string().pattern(/^[1-9]\d{5}$/).required(),
     }).required(),
     notes: Joi.string().max(500).optional(),
-    paymentMethod: Joi.string().valid('card', 'upi', 'netbanking', 'wallet', 'cash').optional(),
+    paymentMethod: Joi.string().valid('card', 'upi', 'netbanking', 'wallet', 'online', 'cash').optional(),
   }),
 });
 

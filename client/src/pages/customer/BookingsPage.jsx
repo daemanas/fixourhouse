@@ -177,8 +177,7 @@ export function BookingsPage() {
   const handleCancel = async () => {
     setCancelling(true);
     try {
-      await updateBookingStatus(selectedBooking._id, {
-        status: 'cancelled',
+      await updateBookingStatus(selectedBooking._id, 'cancelled', {
         reason: cancelReason || 'Cancelled by customer',
       });
       toast.success('Booking cancelled successfully');
