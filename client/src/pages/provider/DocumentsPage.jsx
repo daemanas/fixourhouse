@@ -24,7 +24,7 @@ export function DocumentsPage() {
               LocalFix provider accounts no longer require manual document uploads. Verification is managed directly by our administration team via phone/service review.
             </p>
             <p className="mt-4 text-sm font-medium text-primary-600 dark:text-primary-400">
-              Please check your Provider Workspace Dashboard to view your current verification status.
+              Please check your Partner Workspace Dashboard to view your current verification status.
             </p>
           </div>
         </div>

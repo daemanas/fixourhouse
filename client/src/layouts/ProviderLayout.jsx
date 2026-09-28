@@ -34,7 +34,7 @@ export function ProviderLayout() {
   return (
     <DashboardLayout
       items={items}
-      title="Provider Workspace"
+      title="Partner Workspace"
       subtitle="Manage your services, bookings, availability and earnings"
     />
   );
