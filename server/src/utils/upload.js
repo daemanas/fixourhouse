@@ -12,6 +12,7 @@ export const UPLOADS_ROOT = path.join(__dirname, '..', '..', 'uploads');
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_MIME_TYPES = new Map([
   ['image/jpeg', 'jpg'],
+  ['image/jpg', 'jpg'],
   ['image/png', 'png'],
   ['image/webp', 'webp'],
 ]);
@@ -39,7 +40,7 @@ export const saveBase64Image = (dataUrl, options = {}) => {
   const mimeType = match[1];
   const extension = ALLOWED_MIME_TYPES.get(mimeType);
   if (!extension) {
-    throw new ApiError(400, 'Only JPG, PNG and WebP images are allowed.');
+    throw new ApiError(400, 'Only JPG, JPEG, PNG and WebP images are allowed.');
   }
 
   const buffer = Buffer.from(match[2], 'base64');
@@ -55,6 +56,29 @@ export const saveBase64Image = (dataUrl, options = {}) => {
 
   const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${extension}`;
   fs.writeFileSync(path.join(dir, filename), buffer);
+
+  return `/uploads/${subDir}/${filename}`;
+};
+
+/**
+ * Persist an in-memory Multer file buffer to disk under `uploads/<subDir>`
+ * and return the public relative URL (e.g. "/uploads/services/1699...a1b2.jpg").
+ */
+export const saveImageFile = (file, subDir = 'services') => {
+  if (!file || !Buffer.isBuffer(file.buffer)) {
+    throw new ApiError(400, 'Invalid image file upload.');
+  }
+
+  const extension = ALLOWED_MIME_TYPES.get(file.mimetype);
+  if (!extension) {
+    throw new ApiError(400, 'Only JPG, JPEG, PNG and WebP images are allowed.');
+  }
+
+  const dir = path.join(UPLOADS_ROOT, subDir);
+  ensureDirSync(dir);
+
+  const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${extension}`;
+  fs.writeFileSync(path.join(dir, filename), file.buffer);
 
   return `/uploads/${subDir}/${filename}`;
 };

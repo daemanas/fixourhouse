@@ -2,6 +2,11 @@ import mongoose from 'mongoose';
 
 const categorySchema = new mongoose.Schema(
   {
+    serviceTypeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ServiceType',
+      required: false,
+    },
     name: {
       type: String,
       required: [true, 'Category name is required'],
@@ -32,6 +37,7 @@ const categorySchema = new mongoose.Schema(
   }
 );
 
+categorySchema.index({ serviceTypeId: 1 });
 categorySchema.index({ slug: 1 });
 categorySchema.index({ isActive: 1 });
 

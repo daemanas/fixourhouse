@@ -162,12 +162,35 @@ export const updateProviderValidator = Joi.object({
 
 export const addServiceValidator = Joi.object({
   body: Joi.object({
-    name: Joi.string().required(),
-    description: Joi.string().max(1000).optional(),
-    price: Joi.number().min(0).required(),
-    duration: Joi.string().optional(),
+    name: Joi.string().trim().max(100).required(),
+    description: Joi.string().max(1000).allow('').optional(),
+    startingPrice: Joi.alternatives()
+      .try(Joi.number().min(0), Joi.string().pattern(/^\d+(\.\d+)?$/))
+      .optional(),
+    price: Joi.alternatives()
+      .try(Joi.number().min(0), Joi.string().pattern(/^\d+(\.\d+)?$/))
+      .optional(),
+    durationMinutes: Joi.alternatives()
+      .try(Joi.number().min(0), Joi.string().pattern(/^\d+(\.\d+)?$/))
+      .optional(),
+    duration: Joi.alternatives()
+      .try(Joi.number().min(0), Joi.string().pattern(/^\d+(\.\d+)?$/))
+      .optional(),
+    discountPercentage: Joi.alternatives()
+      .try(Joi.number().min(0).max(100), Joi.string().pattern(/^\d+(\.\d+)?$/))
+      .optional(),
     popular: Joi.boolean().default(false),
-  }),
+    serviceTypeId: Joi.string().hex().length(24).required(),
+    serviceCategoryId: Joi.string().hex().length(24).required(),
+    primaryImage: Joi.string().allow('').optional(),
+    image: Joi.string().allow('').optional(),
+  }).custom((value, helpers) => {
+    const hasCanonicalPrice = value.startingPrice !== undefined || value.price !== undefined;
+    if (!hasCanonicalPrice) {
+      return helpers.message('Starting price is required');
+    }
+    return value;
+  }, 'add service canonical price validation'),
 });
 
 export const updateServiceValidator = Joi.object({
@@ -175,11 +198,28 @@ export const updateServiceValidator = Joi.object({
     serviceId: Joi.string().hex().length(24).required(),
   }),
   body: Joi.object({
-    name: Joi.string().max(100).optional(),
-    description: Joi.string().max(1000).optional(),
-    price: Joi.number().min(0).optional(),
-    duration: Joi.string().optional(),
+    name: Joi.string().trim().max(100).optional(),
+    description: Joi.string().max(1000).allow('').optional(),
+    startingPrice: Joi.alternatives()
+      .try(Joi.number().min(0), Joi.string().pattern(/^\d+(\.\d+)?$/))
+      .optional(),
+    price: Joi.alternatives()
+      .try(Joi.number().min(0), Joi.string().pattern(/^\d+(\.\d+)?$/))
+      .optional(),
+    durationMinutes: Joi.alternatives()
+      .try(Joi.number().min(0), Joi.string().pattern(/^\d+(\.\d+)?$/))
+      .optional(),
+    duration: Joi.alternatives()
+      .try(Joi.number().min(0), Joi.string().pattern(/^\d+(\.\d+)?$/))
+      .optional(),
+    discountPercentage: Joi.alternatives()
+      .try(Joi.number().min(0).max(100), Joi.string().pattern(/^\d+(\.\d+)?$/))
+      .optional(),
     popular: Joi.boolean().optional(),
+    serviceTypeId: Joi.string().hex().length(24).optional(),
+    serviceCategoryId: Joi.string().hex().length(24).optional(),
+    primaryImage: Joi.string().allow('').optional(),
+    image: Joi.string().allow('').optional(),
   }).min(1),
 });
 

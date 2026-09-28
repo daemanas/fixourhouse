@@ -44,6 +44,14 @@ import {
   updateCommissionOffer,
   deleteCommissionOffer,
 } from '../controllers/commissionController.js';
+import {
+  createServiceType,
+  updateServiceType,
+} from '../controllers/serviceTypeController.js';
+import {
+  createCategory,
+  updateCategory,
+} from '../controllers/categoryController.js';
 
 const router = Router();
 
@@ -90,5 +98,11 @@ router.patch('/complaints/:id', validate(updateComplaintValidator), updateCompla
 
 router.get('/reviews', getReviews);
 router.patch('/reviews/:id', updateReview);
+
+// Service Type & Category Management
+router.post('/service-types', createServiceType);
+router.patch('/service-types/:id', updateServiceType);
+router.post('/categories', createCategory);
+router.patch('/categories/:id', updateCategory);
 
 export default router;

@@ -8,554 +8,641 @@ import {
   Star,
   SlidersHorizontal,
   X,
-  Heart,
   Wrench,
   Loader2,
-  Briefcase,
+  Users,
+  IndianRupee,
+  Clock,
+  ArrowRight,
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
-import Select from '../../components/ui/Select';
 import EmptyState from '../../components/ui/EmptyState';
 import Pagination from '../../components/ui/Pagination';
-import Avatar from '../../components/ui/Avatar';
-import { getProviders } from '../../services/providerService';
+import { getServices } from '../../services/serviceService';
+import { getServiceTypes } from '../../services/serviceTypeService';
 import { getCategories } from '../../services/categoryService';
-import { getWishlist, toggleWishlist } from '../../services/userService';
 import { useAuth } from '../../context/AuthContext';
 
 const sortOptions = [
   { value: 'rating', label: 'Highest Rated' },
-  { value: 'price', label: 'Price: Low to High' },
-  { value: 'jobs', label: 'Most Jobs Completed' },
+  { value: 'price_asc', label: 'Price: Low to High' },
+  { value: 'price_desc', label: 'Price: High to Low' },
   { value: 'newest', label: 'Newest' },
 ];
-
-const formatPrice = (provider) => {
-  const base = provider.pricing?.basePrice || provider.services?.[0]?.price;
-  if (!base) return 'Price on request';
-  return `₹${base}/hr`;
-};
-
-const formatLocation = (provider) => {
-  const loc = provider.location;
-  if (!loc) return '';
-  const parts = [];
-  if (loc.address) parts.push(loc.address);
-  if (loc.city && !parts.some((p) => p.toLowerCase() === loc.city.toLowerCase())) {
-    parts.push(loc.city);
-  }
-  if (loc.district && !parts.some((p) => p.toLowerCase() === loc.district.toLowerCase())) {
-    parts.push(loc.district);
-  }
-  if (loc.state && !parts.some((p) => p.toLowerCase() === loc.state.toLowerCase())) {
-    parts.push(loc.state);
-  }
-  return parts.filter(Boolean).join(', ');
-};
 
 export function SearchPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
+  const [serviceTypes, setServiceTypes] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [selectedServiceType, setSelectedServiceType] = useState(
+    searchParams.get('serviceTypeId') || ''
+  );
   const [selectedCategory, setSelectedCategory] = useState(
-    searchParams.get('category') || 'All Categories'
+    searchParams.get('categoryId') || searchParams.get('category') || ''
   );
   const [sortBy, setSortBy] = useState('rating');
-  const [minRating, setMinRating] = useState(0);
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+
   const [location, setLocation] = useState(
-    () => searchParams.get('location') || user?.locationData?.city || user?.location || ''
-  );
-  const [isLocationInitialized, setIsLocationInitialized] = useState(
-    Boolean(searchParams.get('location') || user?.locationData?.city || user?.location)
-  );
+  () =>
+    user?.locationData?.city ||
+    user?.location ||
+    searchParams.get('location') ||
+    ''
+);
   const [showFilters, setShowFilters] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [providers, setProviders] = useState([]);
+  const [services, setServices] = useState([]);
   const [pagination, setPagination] = useState({ total: 0, pages: 1 });
   const [page, setPage] = useState(1);
-  const [wishlist, setWishlist] = useState([]);
 
-  // Auto-initialize location filter using user's saved location if not provided via searchParams
   useEffect(() => {
-    if (!isLocationInitialized) {
-      if (searchParams.get('location')) {
-        setLocation(searchParams.get('location'));
-        setIsLocationInitialized(true);
-      } else if (user?.locationData?.city || user?.location) {
-        setLocation(user?.locationData?.city || user?.location);
-        setIsLocationInitialized(true);
+    const fetchMetadata = async () => {
+      try {
+        const [typeRes, catRes] = await Promise.all([
+          getServiceTypes(),
+          getCategories(),
+        ]);
+        setServiceTypes(typeRes.data.data.serviceTypes || []);
+        setCategories(catRes.data.data.categories || []);
+      } catch (err) {
+        console.error('Failed to load filter options:', err);
       }
-    }
-  }, [user, isLocationInitialized, searchParams]);
-
-  // Load categories from backend
-  useEffect(() => {
-    let mounted = true;
-    getCategories()
-      .then((res) => {
-        if (!mounted) return;
-        const cats = res.data?.data?.categories || [];
-        setCategories([{ name: 'All Categories', slug: 'all' }, ...cats]);
-      })
-      .catch(() => {
-        // If categories fail to load, fall back to "All Categories" only
-        if (mounted) setCategories([{ name: 'All Categories', slug: 'all' }]);
-      });
-    return () => {
-      mounted = false;
     };
+    fetchMetadata();
   }, []);
 
-  // Load real wishlist from backend for authenticated users
-  useEffect(() => {
-    if (!user) {
-      setWishlist([]);
-      return;
-    }
-    let mounted = true;
-    getWishlist()
-      .then((res) => {
-        if (!mounted) return;
-        const items = res.data?.data?.wishlist || [];
-        setWishlist(items.map((p) => p._id));
-      })
-      .catch(() => {
-        if (mounted) setWishlist([]);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [user]);
-
-  useEffect(() => {
-    const category = searchParams.get('category');
-    if (category) {
-      const formatted = category
-        .split('-')
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' ');
-      setSelectedCategory(formatted);
-    }
-  }, [searchParams]);
-
-  const fetchProviders = useCallback(
-    async (params = {}) => {
+  const fetchServicesCatalog = useCallback(
+    async (opts = {}) => {
       setLoading(true);
       setError(null);
+      const currentPage = opts.page !== undefined ? opts.page : page;
+
       try {
-        const activeSearchTerm = params.searchTerm !== undefined ? params.searchTerm : searchTerm;
-        const activeCategory = params.category !== undefined ? params.category : selectedCategory;
-        const activeMinRating = params.minRating !== undefined ? params.minRating : minRating;
-        const activeLocation = params.location !== undefined ? params.location : location;
-        const activeSortBy = params.sortBy !== undefined ? params.sortBy : sortBy;
-        const activePage = params.page !== undefined ? params.page : page;
+        const params = {
+          page: currentPage,
+          limit: 9,
+          sort: sortBy,
+        };
 
-        const query = {};
-        if (activeSearchTerm) query.q = activeSearchTerm;
-        if (activeCategory && activeCategory !== 'All Categories') query.category = activeCategory;
-        if (activeMinRating) query.minRating = activeMinRating;
-        if (activeLocation && activeLocation.trim()) query.city = activeLocation.trim();
-        if (activeSortBy) query.sort = activeSortBy;
-        query.page = activePage;
-        query.limit = 9;
+        const q = (opts.searchTerm !== undefined ? opts.searchTerm : searchTerm).trim();
+        if (q) params.q = q;
 
-        const res = await getProviders(query);
-        const { providers: data, pagination: pg } = res.data.data;
-        setProviders(data);
-        setPagination(pg);
+        const loc = (opts.location !== undefined ? opts.location : location).trim();
+        if (loc) params.location = loc;
+
+        const st = opts.serviceTypeId !== undefined ? opts.serviceTypeId : selectedServiceType;
+        if (st) params.serviceTypeId = st;
+
+        const cat = opts.categoryId !== undefined ? opts.categoryId : selectedCategory;
+        if (cat) params.serviceCategoryId = cat;
+
+        const minP = opts.minPrice !== undefined ? opts.minPrice : minPrice;
+        if (minP) params.minPrice = minP;
+
+        const maxP = opts.maxPrice !== undefined ? opts.maxPrice : maxPrice;
+        if (maxP) params.maxPrice = maxP;
+
+        const res = await getServices(params);
+        const data = res.data.data;
+        setServices(data.services || []);
+        setPagination(data.pagination || { total: 0, pages: 1 });
       } catch (err) {
-        setError(err.response?.data?.message || 'Failed to load providers. Please try again.');
+        setError(err.response?.data?.message || 'Failed to fetch services.');
+        setServices([]);
       } finally {
         setLoading(false);
       }
     },
-    [searchTerm, selectedCategory, minRating, location, sortBy, page]
+    [page, searchTerm, location, selectedServiceType, selectedCategory, minPrice, maxPrice, sortBy]
   );
 
   useEffect(() => {
-    fetchProviders();
-  }, [fetchProviders]);
+    fetchServicesCatalog();
+  }, [fetchServicesCatalog]);
 
-  const handleUseSavedLocation = () => {
-    if (user?.location) {
-      setLocation(user.location);
-      setPage(1);
-      fetchProviders({ page: 1, location: user.location });
-    }
-  };
-
-  const handleClearLocation = () => {
-    setLocation('');
+  const handleSearchSubmit = (e) => {
+    if (e) e.preventDefault();
     setPage(1);
-    fetchProviders({ page: 1, location: '' });
-  };
-
-  const handleToggleWishlist = async (id) => {
-    if (!user) {
-      toast.error('Please login to save providers to your wishlist');
-      return;
-    }
-    try {
-      const res = await toggleWishlist(id);
-      const wishlisted = res.data?.data?.wishlisted;
-      setWishlist((prev) =>
-        wishlisted ? [...prev, id] : prev.filter((p) => p !== id)
-      );
-      toast.success(wishlisted ? 'Added to wishlist' : 'Removed from wishlist');
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to update wishlist');
-    }
-  };
-
-  const handleCategoryChange = (category) => {
-    setSelectedCategory(category);
-    setPage(1);
-    if (category === 'All Categories') {
-      setSearchParams({});
-    } else {
-      setSearchParams({ category: category.toLowerCase().replace(/ /g, '-') });
-    }
-  };
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    setPage(1);
-    fetchProviders({ page: 1 });
+    fetchServicesCatalog({ page: 1 });
   };
 
   const handleClearFilters = () => {
     setSearchTerm('');
-    setSelectedCategory('All Categories');
-    setMinRating(0);
-    const defaultLoc = user?.location || '';
-    setLocation(defaultLoc);
+    setSelectedServiceType('');
+    setSelectedCategory('');
+    setMinPrice('');
+    setMaxPrice('');
+    setLocation('');
+    setSortBy('rating');
     setPage(1);
     setSearchParams({});
-    fetchProviders({ page: 1, searchTerm: '', category: 'All Categories', minRating: 0, location: defaultLoc });
+    fetchServicesCatalog({
+      page: 1,
+      searchTerm: '',
+      serviceTypeId: '',
+      categoryId: '',
+      minPrice: '',
+      maxPrice: '',
+      location: '',
+    });
   };
 
+  const activeFiltersCount =
+    (selectedServiceType ? 1 : 0) +
+    (selectedCategory ? 1 : 0) +
+    (minPrice || maxPrice ? 1 : 0) +
+    (location ? 1 : 0);
+
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-4 sm:space-y-6">
       {/* Search Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-600 to-secondary-700 p-8 text-white">
-        <div className="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-white/10 blur-2xl" />
-        <div className="relative">
-          <h1 className="text-2xl sm:text-3xl font-bold">Find Trusted Professionals</h1>
-          <p className="mt-2 text-white/80">Search by service, category, or provider name</p>
-          <form onSubmit={handleSearch} className="mt-6 max-w-2xl">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <Input
+      <div className="bg-white dark:bg-card-dark rounded-2xl p-3 sm:p-5 lg:p-6 shadow-sm border border-gray-100 dark:border-gray-800">
+        <form onSubmit={handleSearchSubmit} className="space-y-3 sm:space-y-4">
+
+          {/* =========================
+              MOBILE / TABLET
+              Search + Filters same row
+            ========================= */}
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2.5 lg:hidden">
+
+            {/* Search */}
+            <div className="relative min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+
+              <input
                 type="text"
-                placeholder="Search for services, providers..."
+                placeholder="Search services..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-12 py-4 text-base bg-white dark:bg-gray-800 text-ink-light dark:text-ink-dark"
+                className="
+                  w-full min-w-0
+                  pl-10 pr-3 py-2.5
+                  bg-gray-50 dark:bg-gray-800
+                  border border-gray-200 dark:border-gray-700
+                  rounded-xl
+                  focus:ring-2 focus:ring-primary-500
+                  focus:border-transparent
+                  text-sm
+                  text-ink-light dark:text-ink-dark
+                  placeholder-gray-400
+                "
               />
             </div>
-          </form>
-        </div>
-      </div>
 
-      {/* Category Tabs - loaded from backend */}
-      <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
-        {categories.map((cat) => {
-          const active = selectedCategory === cat.name;
-          return (
-            <button
-              key={cat._id || cat.slug || cat.name}
-              onClick={() => handleCategoryChange(cat.name)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-all ${
-                active
-                  ? 'bg-primary-600 text-white shadow-md'
-                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
+            {/* Filters */}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowFilters(!showFilters)}
+              className="
+                relative
+                shrink-0
+                whitespace-nowrap
+                px-3
+              "
             >
-              <Wrench className="h-4 w-4" />
-              {cat.name}
-            </button>
-          );
-        })}
-      </div>
+              <SlidersHorizontal className="h-4 w-4 sm:mr-2" />
 
-      {/* Filters Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            Filters
-            {showFilters && <X className="h-4 w-4" />}
-          </Button>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {pagination.total} provider{pagination.total === 1 ? '' : 's'} found
-          </p>
+              <span className="hidden sm:inline">
+                Filters
+              </span>
 
-          {/* Active location status & quick toggles */}
-          {location ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 text-xs font-medium">
-              <MapPin className="h-3.5 w-3.5 shrink-0" />
-              {user?.location && location.trim().toLowerCase() === user.location.trim().toLowerCase() ? (
-                <span>Location: <strong>{location}</strong> (Saved)</span>
-              ) : (
-                <span>City: <strong>{location}</strong></span>
+              {activeFiltersCount > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-xs bg-primary-500 text-white font-medium">
+                  {activeFiltersCount}
+                </span>
               )}
-              <button
-                onClick={handleClearLocation}
-                title="Clear location filter"
-                className="ml-1 hover:text-primary-900 dark:hover:text-primary-100 focus:outline-none"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ) : (
-            user?.location && (
-              <button
-                onClick={handleUseSavedLocation}
-                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-primary-50 dark:hover:bg-primary-900/30 text-gray-600 dark:text-gray-300 hover:text-primary-600 text-xs font-medium transition-colors"
-              >
-                <MapPin className="h-3.5 w-3.5" /> Use My Location ({user.location})
-              </button>
-            )
-          )}
-        </div>
-        <div className="w-full sm:w-64">
-          <Select
-            value={sortBy}
-            onChange={(e) => {
-              setSortBy(e.target.value);
-              setPage(1);
-            }}
-          >
-            {sortOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-      </div>
+            </Button>
+          </div>
 
-      {/* Advanced Filters */}
-      <AnimatePresence>
-        {showFilters && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
+          {/* =========================
+              MOBILE / TABLET
+              Saved User Location
+            ========================= */}
+          <div className="lg:hidden">
+            <div className="relative">
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+
+              <input
+                type="text"
+                value={location}
+                readOnly
+                aria-label="Saved location"
+                placeholder="Location"
+                className="
+                  w-full
+                  pl-10 pr-4 py-2.5
+                  bg-gray-50 dark:bg-gray-800
+                  border border-gray-200 dark:border-gray-700
+                  rounded-xl
+                  text-sm
+                  text-ink-light dark:text-ink-dark
+                  placeholder-gray-400
+                  cursor-default
+                "
+              />
+            </div>
+          </div>
+
+          {/* =========================
+              DESKTOP
+              Existing layout preserved
+            ========================= */}
+          <div className="hidden lg:grid lg:grid-cols-[minmax(0,1fr)_240px_auto_auto] gap-3">
+
+            {/* Search */}
+            <div className="relative min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+
+              <input
+                type="text"
+                placeholder="Search services..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="
+                  w-full min-w-0
+                  pl-10 pr-4 py-2.5
+                  bg-gray-50 dark:bg-gray-800
+                  border border-gray-200 dark:border-gray-700
+                  rounded-xl
+                  focus:ring-2 focus:ring-primary-500
+                  focus:border-transparent
+                  text-sm
+                  text-ink-light dark:text-ink-dark
+                  placeholder-gray-400
+                "
+              />
+            </div>
+
+            {/* Location */}
+            <div className="relative min-w-0">
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
+
+              <input
+                type="text"
+                placeholder="Location..."
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="
+                  w-full min-w-0
+                  pl-10 pr-4 py-2.5
+                  bg-gray-50 dark:bg-gray-800
+                  border border-gray-200 dark:border-gray-700
+                  rounded-xl
+                  focus:ring-2 focus:ring-primary-500
+                  focus:border-transparent
+                  text-sm
+                  text-ink-light dark:text-ink-dark
+                  placeholder-gray-400
+                "
+              />
+            </div>
+
+            {/* Search Catalog */}
+            <Button
+              type="submit"
+              className="w-full lg:w-auto whitespace-nowrap"
+            >
+              Search Catalog
+            </Button>
+
+            {/* Filters */}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowFilters(!showFilters)}
+              className="relative w-full lg:w-auto whitespace-nowrap"
+            >
+              <SlidersHorizontal className="h-4 w-4 mr-2" />
+              Filters
+
+              {activeFiltersCount > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-xs bg-primary-500 text-white font-medium">
+                  {activeFiltersCount}
+                </span>
+              )}
+            </Button>
+          </div>
+
+          {/* Mobile search submit by Enter still works */}
+          <button
+            type="submit"
+            className="hidden"
+            aria-hidden="true"
+            tabIndex="-1"
           >
-            <Card className="p-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            Search
+          </button>
+
+        </form>
+
+        {/* =========================
+            FILTER PANEL
+          ========================= */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden pt-4 mt-4 border-t border-gray-100 dark:border-gray-800"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+
+                {/* Service Type */}
                 <div>
-                  <label className="block text-sm font-medium text-ink-light dark:text-ink-dark mb-2">
-                    Minimum Rating
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Service Type
                   </label>
-                  <div className="flex gap-2">
-                    {[0, 3, 4, 4.5].map((rating) => (
-                      <button
-                        key={rating}
-                        onClick={() => {
-                          setMinRating(rating);
-                          setPage(1);
-                        }}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                          minRating === rating
-                            ? 'bg-primary-600 text-white'
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
-                        }`}
-                      >
-                        {rating === 0 ? 'Any' : `${rating}+`}
-                      </button>
+
+                  <select
+                    value={selectedServiceType}
+                    onChange={(e) => setSelectedServiceType(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-ink-light dark:text-ink-dark focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">All Types</option>
+
+                    {serviceTypes.map((st) => (
+                      <option key={st._id} value={st._id}>
+                        {st.name}
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 </div>
+
+                {/* Category */}
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-ink-light dark:text-ink-dark">
-                      Location / City
-                    </label>
-                    <div className="flex items-center gap-2 text-xs">
-                      {user?.location && (
-                        <button
-                          type="button"
-                          onClick={handleUseSavedLocation}
-                          className="text-primary-600 hover:underline font-medium"
-                        >
-                          My Location
-                        </button>
-                      )}
-                      {location && (
-                        <button
-                          type="button"
-                          onClick={handleClearLocation}
-                          className="text-gray-500 hover:underline"
-                        >
-                          All Locations
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      placeholder="Enter city or area (e.g. Kolkata)"
-                      value={location}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setLocation(val);
-                        setPage(1);
-                        fetchProviders({ page: 1, location: val });
-                      }}
-                      className="pl-10"
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Category
+                  </label>
+
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-ink-light dark:text-ink-dark focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">All Categories</option>
+
+                    {categories.map((c) => (
+                      <option key={c._id || c.name} value={c._id || c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Price Range */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Price Range (₹)
+                  </label>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      value={minPrice}
+                      onChange={(e) => setMinPrice(e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-ink-light dark:text-ink-dark"
+                    />
+
+                    <span className="text-gray-400">-</span>
+
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      value={maxPrice}
+                      onChange={(e) => setMaxPrice(e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-ink-light dark:text-ink-dark"
                     />
                   </div>
                 </div>
+
+                {/* Sort */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Sort By
+                  </label>
+
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-ink-light dark:text-ink-dark focus:ring-2 focus:ring-primary-500"
+                  >
+                    {sortOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div className="mt-6 flex justify-end">
-                <Button variant="outline" size="sm" onClick={handleClearFilters}>
-                  Clear Filters
+
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearFilters}
+                >
+                  Clear All Filters
+                </Button>
+
+                <Button
+                  size="sm"
+                  onClick={() => handleSearchSubmit()}
+                >
+                  Apply Filters
                 </Button>
               </div>
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
-      {/* Results */}
+
+      
+      {/* Catalog Services Grid */}
       {loading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+          <Loader2 className="h-8 w-8 animate-spin mb-3 text-primary-500" />
+          <p className="text-sm font-medium">Loading catalog services...</p>
         </div>
       ) : error ? (
-        <Card className="p-8 text-center">
-          <p className="text-red-500">{error}</p>
-          <Button variant="outline" className="mt-4" onClick={() => fetchProviders()}>
-            Try Again
-          </Button>
-        </Card>
-      ) : providers.length === 0 ? (
+        <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-xl text-center text-sm">
+          {error}
+        </div>
+      ) : services.length === 0 ? (
         <EmptyState
-          icon={Search}
-          title="No service providers found"
-          description="Try adjusting your search or filters to find more providers."
-          action={
-            <Button onClick={handleClearFilters}>Clear Search</Button>
-          }
+          icon={Wrench}
+          title="No services found"
+          description="Try adjusting your search terms or filter criteria to find available services."
+          actionLabel="Clear Filters"
+          onAction={handleClearFilters}
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {providers.map((provider, i) => (
-            <motion.div
-              key={provider._id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-            >
-              <Card className="p-6 hover:shadow-card transition-shadow">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-4">
-                    <Avatar
-                      src={provider.userId?.avatar}
-                      name={provider.businessName}
-                      size="lg"
-                      rounded="rounded-xl"
-                    />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-ink-light dark:text-ink-dark">
-                          {provider.businessName}
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-4 lg:gap-5">
+          {services.map((service, index) => {
+            const startingPrice = Number(service.startingPrice ?? service.price ?? 0);
+            const discountPercentage = Number(service.discountPercentage ?? 0);
+            const hasDiscount = discountPercentage > 0;
+            const finalStartingPrice = hasDiscount
+              ? startingPrice * (1 - discountPercentage / 100)
+              : startingPrice;
+            const finalPrice = Math.round(finalStartingPrice * 100) / 100;
+
+            return (
+              <motion.div
+                key={service._id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.18) }}
+              >
+                <Card className="group h-full min-w-0 flex flex-col overflow-hidden rounded-xl sm:rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-card-dark p-0 shadow-sm hover:-translate-y-0.5 hover:shadow-xl transition-all duration-200">
+                  <div className="flex flex-1 flex-col">
+                    {/* Service image */}
+                    <div className="relative aspect-[1/1] sm:aspect-[4/3] overflow-hidden bg-gray-100 dark:bg-gray-800">
+                      {service.primaryImage || service.images?.[0] ? (
+                        <img
+                          src={service.primaryImage || service.images[0]}
+                          alt={service.name}
+                          loading="lazy"
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                          <Wrench className="h-8 w-8 sm:h-12 sm:w-12 stroke-1" />
+                        </div>
+                      )}
+
+                      {/* Soft image overlay */}
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/35 to-transparent" />
+
+                      {service.serviceCategoryId?.name && (
+                        <div className="absolute top-2 left-2 sm:top-3 sm:left-3 max-w-[70%]">
+                          <Badge
+                            variant="primary"
+                            className="max-w-full truncate text-[9px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 shadow-md backdrop-blur-sm"
+                          >
+                            {service.serviceCategoryId.name}
+                          </Badge>
+                        </div>
+                      )}
+
+                      {hasDiscount && (
+                        <div className="absolute top-2 right-2 sm:top-3 sm:right-3 bg-red-500 text-white font-bold text-[9px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md shadow-md">
+                          {discountPercentage}% OFF
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Product information */}
+                    <div className="flex flex-1 flex-col p-2.5 sm:p-4">
+                      <div className="min-w-0">
+                        <h3 className="text-[13px] sm:text-base lg:text-lg font-bold leading-snug text-ink-light dark:text-ink-dark line-clamp-2 min-h-[36px] sm:min-h-[44px]">
+                          {service.name}
                         </h3>
-                        {provider.isVerified && (
-                          <Badge variant="success">Verified</Badge>
+
+                        {service.serviceTypeId?.name && (
+                          <p className="text-[9px] sm:text-xs text-primary-600 dark:text-primary-400 font-semibold mt-1 truncate">
+                            {service.serviceTypeId.name}
+                          </p>
+                        )}
+
+                        <p className="text-[10px] sm:text-xs lg:text-sm text-gray-500 dark:text-gray-400 mt-1.5 sm:mt-2 line-clamp-2 leading-relaxed min-h-[28px] sm:min-h-[34px]">
+                          {service.description || 'Professional local service'}
+                        </p>
+                      </div>
+
+                      {/* Compact service stats */}
+                      <div className="mt-2.5 sm:mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[9px] sm:text-xs text-gray-500 dark:text-gray-400">
+                        <div className="flex min-w-0 items-center gap-1">
+                          <Users className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0 text-primary-500" />
+                          <span className="truncate">
+                            {service.availableProvidersCount ?? service.providerCount ?? 0} providers
+                          </span>
+                        </div>
+
+                        {service.durationMinutes && (
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0 text-gray-400" />
+                            <span>~{service.durationMinutes}m</span>
+                          </div>
                         )}
                       </div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{provider.category}</p>
-                      <div className="mt-1 flex items-center gap-1">
-                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                        <span className="text-sm font-medium text-ink-light dark:text-ink-dark">
-                          {provider.rating?.toFixed(1) || '0.0'}
+
+                      {/* Rating */}
+                      <div className="mt-2 flex items-center gap-1">
+                        <Star className="h-3.5 w-3.5 sm:h-4 sm:w-4 fill-amber-400 text-amber-400 shrink-0" />
+                        <span className="text-[11px] sm:text-sm font-bold text-ink-light dark:text-ink-dark">
+                          {Number(service.averageRating ?? service.rating ?? 0).toFixed(1)}
                         </span>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">
-                          ({provider.reviewCount || 0} reviews)
+                        <span className="text-[9px] sm:text-xs text-gray-400 truncate">
+                          ({service.reviewCount || 0})
                         </span>
+                      </div>
+
+                      {/* Price + CTA */}
+                      <div className="mt-auto pt-3 sm:pt-4 border-t border-gray-100 dark:border-gray-800">
+                        <div className="flex items-end justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-[9px] sm:text-[10px] text-gray-400 block">
+                              Starting from
+                            </span>
+                            <div className="flex flex-wrap items-baseline gap-1">
+                              <span className="text-sm sm:text-lg font-extrabold text-primary-600 dark:text-primary-400">
+                                ₹{finalPrice}
+                              </span>
+                              {hasDiscount && (
+                                <span className="text-[9px] sm:text-xs text-gray-400 line-through">
+                                  ₹{startingPrice}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <Link
+                            to={`/customer/service/${service._id}`}
+                            className="shrink-0"
+                            aria-label={`View ${service.name}`}
+                          >
+                            <Button
+                              size="sm"
+                              className="h-8 sm:h-9 px-2.5 sm:px-3 text-[10px] sm:text-xs gap-1 whitespace-nowrap"
+                            >
+                              <span>View</span>
+                              <ArrowRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                            </Button>
+                          </Link>
+                        </div>
                       </div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleToggleWishlist(provider._id)}
-                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    aria-label="Add to wishlist"
-                  >
-                    <Heart
-                      className={`h-5 w-5 ${
-                        wishlist.includes(provider._id)
-                          ? 'fill-danger-500 text-danger-500'
-                          : 'text-gray-400'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                <div className="mt-4 flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-                  {formatLocation(provider) && (
-                    <span className="inline-flex items-center gap-1">
-                      <MapPin className="h-4 w-4" /> {formatLocation(provider)}
-                    </span>
-                  )}
-                  <span className="inline-flex items-center gap-1">
-                    <Briefcase className="h-4 w-4" /> {provider.experience || 0} yrs exp
-                  </span>
-                </div>
-
-                {provider.services?.length > 0 && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {provider.services.slice(0, 3).map((service) => (
-                      <span
-                        key={service._id || service.name}
-                        className="px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-xs text-gray-600 dark:text-gray-300"
-                      >
-                        {service.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                <div className="mt-6 flex items-center justify-between">
-                  <div>
-                    <p className="text-lg font-bold text-ink-light dark:text-ink-dark">
-                      {formatPrice(provider)}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {provider.jobsCompleted?.toLocaleString() || 0} jobs completed
-                    </p>
-                  </div>
-                  <Link to={`/customer/provider/${provider._id}`}>
-                    <Button size="sm">View Profile</Button>
-                  </Link>
-                </div>
-              </Card>
-            </motion.div>
-          ))}
+                </Card>
+              </motion.div>
+            );
+          })}
         </div>
       )}
 
       {/* Pagination */}
-      {!loading && !error && providers.length > 0 && pagination.pages > 1 && (
+      {!loading && !error && services.length > 0 && pagination.pages > 1 && (
         <Pagination
           currentPage={page}
           totalPages={pagination.pages}
           onPageChange={(p) => {
             setPage(p);
-            fetchProviders({ page: p });
+            fetchServicesCatalog({ page: p });
           }}
         />
       )}

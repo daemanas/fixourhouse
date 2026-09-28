@@ -12,10 +12,12 @@ import {
   Bell,
   Globe,
   Percent,
+  Layers,
 } from 'lucide-react';
 
 const items = [
   { to: '/admin/analytics', label: 'Analytics', icon: LayoutDashboard },
+  { to: '/admin/service-catalog', label: 'Service Catalog', icon: Layers },
   { to: '/admin/customers', label: 'Customers', icon: Users },
   { to: '/admin/providers', label: 'Providers', icon: HardHat },
   { to: '/admin/bookings', label: 'Bookings', icon: CalendarCheck },

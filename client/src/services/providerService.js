@@ -28,7 +28,8 @@ export const deleteProviderAccount = () => api.delete('/providers/me');
 export const addService = (data) => api.post('/providers/me/services', data);
 
 // Update a service on own profile
-export const updateService = (serviceId, data) => api.patch(`/providers/me/services/${serviceId}`, data);
+export const updateService = (serviceId, data) =>
+  api.patch(`/providers/me/services/${serviceId}`, data);
 
 // Delete a service from own profile
 export const deleteService = (serviceId) => api.delete(`/providers/me/services/${serviceId}`);

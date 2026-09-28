@@ -13,7 +13,9 @@ import {
   Loader2,
   CreditCard,
   Banknote,
+  Upload,
   Wallet,
+  Camera,
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -22,7 +24,9 @@ import EmptyState from '../../components/ui/EmptyState';
 import Input from '../../components/ui/Input';
 import Modal from '../../components/ui/Modal';
 import Avatar from '../../components/ui/Avatar';
+import ImageUploadField from '../../components/ui/ImageUploadField';
 import { getMyBookings, updateBookingStatus } from '../../services/bookingService';
+import { uploadCompletedServicePhotos } from '../../services/completedPhotoService';
 
 const statusConfig = {
   accepted: { label: 'Accepted', color: 'primary' },
@@ -73,6 +77,44 @@ export function JobsPage() {
   const [completeModalJob, setCompleteModalJob] = useState(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
   const [completeLoading, setCompleteLoading] = useState(false);
+  const [photoModalJob, setPhotoModalJob] = useState(null);
+  // Real File objects for the two required photos (plus optional extras)
+  const [photoFiles, setPhotoFiles] = useState([null, null]);
+  const [photoCaption, setPhotoCaption] = useState('');
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+
+  const openPhotoModal = (job) => {
+    setPhotoModalJob(job);
+    setPhotoFiles([null, null]);
+    setPhotoCaption('');
+  };
+
+  const handleUploadPhotos = async (e) => {
+    if (e) e.preventDefault();
+    const validFiles = photoFiles.filter(Boolean);
+    if (validFiles.length < 2) {
+      toast.error('At least 2 photos are required');
+      return;
+    }
+    setUploadingPhotos(true);
+    try {
+      const formData = new FormData();
+      formData.append('bookingId', photoModalJob._id);
+      if (photoCaption.trim()) formData.append('caption', photoCaption.trim());
+      
+      validFiles.forEach((file) => {
+        formData.append('photos', file);
+      });
+
+      await uploadCompletedServicePhotos(formData);
+      toast.success('Completed work photos uploaded successfully!');
+      setPhotoModalJob(null);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to upload photos');
+    } finally {
+      setUploadingPhotos(false);
+    }
+  };
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -130,11 +172,11 @@ export function JobsPage() {
         prev.map((j) =>
           j._id === completeModalJob._id
             ? updatedBooking || {
-                ...j,
-                status: 'completed',
-                paymentMethod: selectedPaymentMethod,
-                completedAt: new Date().toISOString(),
-              }
+              ...j,
+              status: 'completed',
+              paymentMethod: selectedPaymentMethod,
+              completedAt: new Date().toISOString(),
+            }
             : j
         )
       );
@@ -228,11 +270,10 @@ export function JobsPage() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-              activeTab === tab.key
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${activeTab === tab.key
                 ? 'bg-primary-600 text-white'
                 : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-            }`}
+              }`}
           >
             {tab.label}
           </button>
@@ -260,10 +301,10 @@ export function JobsPage() {
             ].filter(Boolean).join(', ');
             const scheduledDate = job.scheduledDate
               ? new Date(job.scheduledDate).toLocaleDateString('en-IN', {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                })
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })
               : '—';
             const statusInfo = statusConfig[job.status] || { label: job.status, color: 'primary' };
 
@@ -358,10 +399,20 @@ export function JobsPage() {
                         </Button>
                       )}
                       {job.status === 'completed' && (
-                        <span className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          Completed
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                            <Clock className="h-4 w-4" />
+                            Completed
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openPhotoModal(job)}
+                          >
+                            <Camera className="h-4 w-4" />
+                            Add Work Photos
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -430,16 +481,14 @@ export function JobsPage() {
                   type="button"
                   onClick={() => setSelectedPaymentMethod(method.id)}
                   disabled={completeLoading}
-                  className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${
-                    isSelected
+                  className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${isSelected
                       ? 'border-primary-600 bg-primary-50 dark:bg-primary-900/20'
                       : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                  }`}
+                    }`}
                 >
                   <Icon
-                    className={`h-5 w-5 ${
-                      isSelected ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400'
-                    }`}
+                    className={`h-5 w-5 ${isSelected ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400'
+                      }`}
                   />
                   <span className="text-sm font-medium text-ink-light dark:text-ink-dark">
                     {method.label}
@@ -462,6 +511,51 @@ export function JobsPage() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Upload Completed Work Photos Modal */}
+      <Modal
+        isOpen={!!photoModalJob}
+        onClose={() => {
+          if (!uploadingPhotos) setPhotoModalJob(null);
+        }}
+        title="Upload Completed Work Photos"
+        subtitle="Select at least 2 photos showcasing the finished service"
+      >
+        <form onSubmit={handleUploadPhotos} className="space-y-4">
+          <ImageUploadField
+            label="Photo 1 *"
+            value={photoFiles[0]}
+            onChange={(file) => setPhotoFiles((prev) => { const next = [...prev]; next[0] = file; return next; })}
+            disabled={uploadingPhotos}
+          />
+          <ImageUploadField
+            label="Photo 2 *"
+            value={photoFiles[1]}
+            onChange={(file) => setPhotoFiles((prev) => { const next = [...prev]; next[1] = file; return next; })}
+            disabled={uploadingPhotos}
+          />
+          <Input
+            label="Caption (Optional)"
+            value={photoCaption}
+            onChange={(e) => setPhotoCaption(e.target.value)}
+            placeholder="e.g. Cleaned filter and recharged AC coolant"
+          />
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPhotoModalJob(null)}
+              disabled={uploadingPhotos}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={uploadingPhotos}>
+              <Upload className="h-4 w-4" />
+              Upload Photos
+            </Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

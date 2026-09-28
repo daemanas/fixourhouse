@@ -173,11 +173,21 @@ const providerSchema = new mongoose.Schema(
     gallery: [String],
     services: [
       {
-        name: { type: String, required: true },
-        description: String,
-        price: { type: Number, required: true },
-        duration: String,
+        name: { type: String, required: true, trim: true },
+        description: { type: String, default: '' },
+        startingPrice: { type: Number, required: true, min: 0, default: 0 },
+        price: { type: Number, required: true, min: 0, default: 0 },
+        durationMinutes: { type: Number, default: 0, min: 0 },
+        duration: { type: String, default: '' },
+        discountPercentage: { type: Number, default: 0, min: 0, max: 100 },
+        serviceTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceType', default: null },
+        serviceCategoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', default: null },
+        categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', default: null },
+        primaryImage: { type: String, default: '' },
+        image: { type: String, default: '' },
+        images: { type: [String], default: [] },
         popular: { type: Boolean, default: false },
+        isActive: { type: Boolean, default: true },
         // Creation/modification timestamps so every service (including those
         // added via the provider's "My Services" CRUD) carries a real
         // creation date. Embedded subdocs created BEFORE this field existed

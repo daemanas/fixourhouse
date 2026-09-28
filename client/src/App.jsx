@@ -25,6 +25,7 @@ const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'));
 // Customer pages
 const CustomerDashboard = lazy(() => import('./pages/customer/CustomerDashboard'));
 const SearchPage = lazy(() => import('./pages/customer/SearchPage'));
+const ServiceDetailPage = lazy(() => import('./pages/customer/ServiceDetailPage'));
 const ProviderProfilePage = lazy(() => import('./pages/customer/ProviderProfilePage'));
 const BookServicePage = lazy(() => import('./pages/customer/BookServicePage'));
 const BookingsPage = lazy(() => import('./pages/customer/BookingsPage'));
@@ -50,6 +51,7 @@ const ProviderSettingsPage = lazy(() => import('./pages/provider/ProviderSetting
 // Admin pages
 const AdminAnalyticsPage = lazy(() => import('./pages/admin/AdminAnalyticsPage'));
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const AdminServiceCatalogPage = lazy(() => import('./pages/admin/AdminServiceCatalogPage'));
 const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage'));
 const AdminProvidersPage = lazy(() => import('./pages/admin/AdminProvidersPage'));
 const AdminProviderDetailPage = lazy(() => import('./pages/admin/AdminProviderDetailPage'));
@@ -113,6 +115,7 @@ function App() {
         <Route element={<ProtectedRoute roles={[env.ROLES.CUSTOMER]}><CustomerLayout /></ProtectedRoute>}>
           <Route path="/customer/dashboard" element={<CustomerDashboard />} />
           <Route path="/customer/search" element={<SearchPage />} />
+          <Route path="/customer/service/:id" element={<ServiceDetailPage />} />
           <Route path="/customer/provider/:id" element={<ProviderProfilePage />} />
           <Route path="/customer/book/:providerId" element={<BookServicePage />} />
           <Route path="/customer/bookings" element={<BookingsPage />} />
@@ -143,6 +146,7 @@ function App() {
         <Route element={<ProtectedRoute roles={[env.ROLES.ADMIN]}><AdminLayout /></ProtectedRoute>}>
           <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
           <Route path="/admin/dashboard" element={<AdminAnalyticsPage />} />
+          <Route path="/admin/service-catalog" element={<AdminServiceCatalogPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/customers" element={<AdminCustomersPage />} />
           <Route path="/admin/customers/:id" element={<AdminCustomerDetailPage />} />

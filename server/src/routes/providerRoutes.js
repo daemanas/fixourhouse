@@ -26,6 +26,7 @@ import {
 } from '../controllers/complaintController.js';
 import { protect, authorize } from '../middlewares/index.js';
 import { validate } from '../middlewares/validate.js';
+import { handleSingleUpload } from '../middlewares/upload.js';
 import {
   createProviderValidator,
   updateProviderValidator,
@@ -55,8 +56,8 @@ router.delete('/me', authorize('provider'), deleteMyAccount);
 router.get('/me/stats', authorize('provider'), getProviderStats);
 router.get('/me/earnings', authorize('provider'), getProviderEarnings);
 router.patch('/me/profile', authorize('provider'), validate(updateProviderValidator), updateMyProviderProfile);
-router.post('/me/services', authorize('provider'), validate(addServiceValidator), addServices);
-router.patch('/me/services/:serviceId', authorize('provider'), validate(updateServiceValidator), updateService);
+router.post('/me/services', authorize('provider'), handleSingleUpload, validate(addServiceValidator), addServices);
+router.patch('/me/services/:serviceId', authorize('provider'), handleSingleUpload, validate(updateServiceValidator), updateService);
 router.delete('/me/services/:serviceId', authorize('provider'), deleteService);
 router.patch('/me/availability', authorize('provider'), validate(availabilityValidator), updateAvailability);
 router.get('/me/availability', authorize('provider'), getMyAvailability);

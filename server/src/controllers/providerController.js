@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Provider from '../models/Provider.js';
 import User from '../models/User.js';
 import Booking from '../models/Booking.js';
@@ -10,7 +11,7 @@ import Notification from '../models/Notification.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
-import { saveBase64Image } from '../utils/upload.js';
+import { saveBase64Image, saveImageFile } from '../utils/upload.js';
 import {
   computeProviderEarnings,
   safePercentageChange,
@@ -363,27 +364,276 @@ export const updateMyProviderProfile = asyncHandler(async (req, res) => {
 // @desc    Add services to own provider profile
 // @route   POST /api/v1/providers/me/services
 // @access  Private
+// export const addServices = asyncHandler(async (req, res) => {
+//   const provider = await Provider.findOne({ userId: req.user._id });
+//   if (!provider) {
+//     throw new ApiError(404, 'Provider profile not found');
+//   }
+
+//   const { name, price, duration, description, serviceTypeId, serviceCategoryId, image } = req.body;
+
+//   if (!name || !name.trim()) {
+//     throw new ApiError(400, 'Service name is required');
+//   }
+
+//   let imageUrl = '';
+//   if (req.file) {
+//     // Multer file upload takes highest priority
+//     imageUrl = saveImageFile(req.file, 'services');
+//   } else if (typeof image === 'string' && image.startsWith('data:image/')) {
+//     imageUrl = saveBase64Image(image, { subDir: 'services' });
+//   } else if (typeof image === 'string' && image) {
+//     imageUrl = image;
+//   }
+
+//   const serviceId = new mongoose.Types.ObjectId();
+
+//   // Create standalone Service document
+//   const serviceDoc = await Service.create({
+//     _id: serviceId,
+//     providerId: provider._id,
+//     serviceTypeId: serviceTypeId || undefined,
+//     serviceCategoryId: serviceCategoryId || undefined,
+//     categoryId: serviceCategoryId || undefined,
+//     name: name.trim(),
+//     description: description ? description.trim() : '',
+//     price: Number(price) || 0,
+//     duration: duration ? duration.trim() : '',
+//     image: imageUrl,
+//     images: imageUrl ? [imageUrl] : [],
+//     isActive: true,
+//   });
+
+//   // Push to provider.services array for backward compatibility
+//   provider.services.push({
+//     _id: serviceId,
+//     name: name.trim(),
+//     description: description ? description.trim() : '',
+//     price: Number(price) || 0,
+//     duration: duration ? duration.trim() : '',
+//     image: imageUrl,
+//     serviceTypeId: serviceTypeId || undefined,
+//     serviceCategoryId: serviceCategoryId || undefined,
+//     createdAt: new Date(),
+//   });
+
+//   await provider.save();
+//   provider.availability = normalizeAvailability(provider.availability);
+
+//   res.status(201).json(
+//     new ApiResponse(201, { provider, service: serviceDoc }, 'Service added successfully')
+//   );
+// });
+
+// // @desc    Update a service on own provider profile
+// // @route   PATCH /api/v1/providers/me/services/:serviceId
+// // @access  Private (Provider)
+// export const updateService = asyncHandler(async (req, res) => {
+//   const provider = await Provider.findOne({ userId: req.user._id });
+//   if (!provider) {
+//     throw new ApiError(404, 'Provider profile not found');
+//   }
+
+//   const service = provider.services.id(req.params.serviceId);
+//   if (!service) {
+//     throw new ApiError(404, 'Service not found');
+//   }
+
+//   const { name, price, duration, description, serviceTypeId, serviceCategoryId, image } = req.body;
+
+//   let imageUrl = service.image || '';
+//   if (req.file) {
+//     // Multer file upload takes highest priority
+//     imageUrl = saveImageFile(req.file, 'services');
+//   } else if (typeof image === 'string' && image.startsWith('data:image/')) {
+//     imageUrl = saveBase64Image(image, { subDir: 'services' });
+//   } else if (typeof image === 'string') {
+//     // An empty multipart text field explicitly removes the saved cover image.
+//     imageUrl = image;
+//   }
+
+//   if (name !== undefined) service.name = name.trim();
+//   if (price !== undefined) service.price = Number(price);
+//   if (duration !== undefined) service.duration = duration.trim();
+//   if (description !== undefined) service.description = description.trim();
+//   if (serviceTypeId !== undefined) service.serviceTypeId = serviceTypeId;
+//   if (serviceCategoryId !== undefined) service.serviceCategoryId = serviceCategoryId;
+//   service.image = imageUrl;
+//   service.updatedAt = new Date();
+
+//   await provider.save();
+
+//   // Also update standalone Service document
+//   let serviceDoc = await Service.findById(req.params.serviceId);
+//   if (!serviceDoc) {
+//     serviceDoc = new Service({
+//       _id: req.params.serviceId,
+//       providerId: provider._id,
+//     });
+//   }
+//   if (name !== undefined) serviceDoc.name = name.trim();
+//   if (price !== undefined) serviceDoc.price = Number(price);
+//   if (duration !== undefined) serviceDoc.duration = duration.trim();
+//   if (description !== undefined) serviceDoc.description = description.trim();
+//   if (serviceTypeId !== undefined) serviceDoc.serviceTypeId = serviceTypeId;
+//   if (serviceCategoryId !== undefined) {
+//     serviceDoc.serviceCategoryId = serviceCategoryId;
+//     serviceDoc.categoryId = serviceCategoryId;
+//   }
+//   serviceDoc.image = imageUrl;
+//   if (imageUrl && !serviceDoc.images?.includes(imageUrl)) {
+//     serviceDoc.images = [imageUrl, ...(serviceDoc.images || [])];
+//   }
+//   await serviceDoc.save();
+
+//   provider.availability = normalizeAvailability(provider.availability);
+
+//   res.status(200).json(
+//     new ApiResponse(200, { provider, service: serviceDoc }, 'Service updated successfully')
+//   );
+// });
+
+
+// @desc    Add services to own provider profile
+// @route   POST /api/v1/providers/me/services
+// @access  Private
 export const addServices = asyncHandler(async (req, res) => {
   const provider = await Provider.findOne({ userId: req.user._id });
+
   if (!provider) {
     throw new ApiError(404, 'Provider profile not found');
   }
 
-  provider.services.push(req.body);
-  await provider.save();
+  const {
+    name,
+    startingPrice,
+    price,
+    durationMinutes,
+    duration,
+    discountPercentage,
+    description,
+    serviceTypeId,
+    serviceCategoryId,
+    image,
+    primaryImage,
+  } = req.body;
 
+  const trimmedName = typeof name === 'string' ? name.trim() : '';
+  if (!trimmedName) {
+    throw new ApiError(400, 'Service name is required');
+  }
+
+  if (!serviceTypeId) {
+    throw new ApiError(400, 'Service type is required');
+  }
+
+  if (!serviceCategoryId) {
+    throw new ApiError(400, 'Service category is required');
+  }
+
+  const finalStartingPrice =
+    startingPrice !== undefined && startingPrice !== ''
+      ? Number(startingPrice)
+      : price !== undefined && price !== ''
+        ? Number(price)
+        : 0;
+
+  if (Number.isNaN(finalStartingPrice) || finalStartingPrice < 0) {
+    throw new ApiError(400, 'A valid starting price is required');
+  }
+
+  const finalDurationMinutes =
+    durationMinutes !== undefined && durationMinutes !== ''
+      ? Number(durationMinutes)
+      : duration !== undefined && duration !== ''
+        ? Number(duration)
+        : 0;
+
+  if (Number.isNaN(finalDurationMinutes) || finalDurationMinutes < 0) {
+    throw new ApiError(400, 'Duration must be a valid non-negative number');
+  }
+
+  const finalDiscountPercentage =
+    discountPercentage !== undefined && discountPercentage !== ''
+      ? Number(discountPercentage)
+      : 0;
+
+  if (
+    Number.isNaN(finalDiscountPercentage) ||
+    finalDiscountPercentage < 0 ||
+    finalDiscountPercentage > 100
+  ) {
+    throw new ApiError(400, 'Discount must be between 0 and 100%');
+  }
+
+  let imageUrl = '';
+
+  if (req.file) {
+    imageUrl = saveImageFile(req.file, 'services');
+  } else if (typeof image === 'string' && image.startsWith('data:image/')) {
+    imageUrl = saveBase64Image(image, { subDir: 'services' });
+  } else if (typeof primaryImage === 'string' && primaryImage) {
+    imageUrl = primaryImage;
+  } else if (typeof image === 'string' && image) {
+    imageUrl = image;
+  }
+
+  const serviceId = new mongoose.Types.ObjectId();
+
+  const serviceDoc = await Service.create({
+    _id: serviceId,
+    providerId: provider._id,
+    serviceTypeId: serviceTypeId || null,
+    serviceCategoryId: serviceCategoryId || null,
+    categoryId: serviceCategoryId || null,
+    name: trimmedName,
+    description: description ? String(description).trim() : '',
+    startingPrice: finalStartingPrice,
+    price: finalStartingPrice,
+    durationMinutes: finalDurationMinutes,
+    duration: String(finalDurationMinutes),
+    discountPercentage: finalDiscountPercentage,
+    primaryImage: imageUrl,
+    image: imageUrl,
+    images: imageUrl ? [imageUrl] : [],
+    isActive: true,
+  });
+
+  provider.services.push({
+    _id: serviceId,
+    name: trimmedName,
+    description: description ? String(description).trim() : '',
+    startingPrice: finalStartingPrice,
+    price: finalStartingPrice,
+    durationMinutes: finalDurationMinutes,
+    duration: String(finalDurationMinutes),
+    discountPercentage: finalDiscountPercentage,
+    serviceTypeId: serviceTypeId || undefined,
+    serviceCategoryId: serviceCategoryId || undefined,
+    categoryId: serviceCategoryId || undefined,
+    primaryImage: imageUrl,
+    image: imageUrl,
+    images: imageUrl ? [imageUrl] : [],
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  await provider.save();
   provider.availability = normalizeAvailability(provider.availability);
 
   res.status(201).json(
-    new ApiResponse(201, { provider }, 'Service added successfully')
+    new ApiResponse(201, { provider, service: serviceDoc }, 'Service added successfully')
   );
 });
+
 
 // @desc    Update a service on own provider profile
 // @route   PATCH /api/v1/providers/me/services/:serviceId
 // @access  Private (Provider)
 export const updateService = asyncHandler(async (req, res) => {
   const provider = await Provider.findOne({ userId: req.user._id });
+
   if (!provider) {
     throw new ApiError(404, 'Provider profile not found');
   }
@@ -393,13 +643,149 @@ export const updateService = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Service not found');
   }
 
-  Object.assign(service, req.body);
+  const {
+    name,
+    startingPrice,
+    price,
+    durationMinutes,
+    duration,
+    discountPercentage,
+    description,
+    serviceTypeId,
+    serviceCategoryId,
+    image,
+    primaryImage,
+  } = req.body;
+
+  const finalStartingPrice =
+    startingPrice !== undefined && startingPrice !== ''
+      ? Number(startingPrice)
+      : price !== undefined && price !== ''
+        ? Number(price)
+        : Number(service.startingPrice ?? service.price ?? 0);
+
+  if (Number.isNaN(finalStartingPrice) || finalStartingPrice < 0) {
+    throw new ApiError(400, 'A valid starting price is required');
+  }
+
+  const finalDurationMinutes =
+    durationMinutes !== undefined && durationMinutes !== ''
+      ? Number(durationMinutes)
+      : duration !== undefined && duration !== ''
+        ? Number(duration)
+        : Number(service.durationMinutes ?? service.duration ?? 0);
+
+  if (Number.isNaN(finalDurationMinutes) || finalDurationMinutes < 0) {
+    throw new ApiError(400, 'Duration must be a valid non-negative number');
+  }
+
+  const finalDiscountPercentage =
+    discountPercentage !== undefined && discountPercentage !== ''
+      ? Number(discountPercentage)
+      : Number(service.discountPercentage ?? 0);
+
+  if (
+    Number.isNaN(finalDiscountPercentage) ||
+    finalDiscountPercentage < 0 ||
+    finalDiscountPercentage > 100
+  ) {
+    throw new ApiError(400, 'Discount must be between 0 and 100%');
+  }
+
+  const finalServiceTypeId =
+    serviceTypeId !== undefined ? serviceTypeId : service.serviceTypeId || null;
+
+  const finalServiceCategoryId =
+    serviceCategoryId !== undefined
+      ? serviceCategoryId
+      : service.serviceCategoryId || service.categoryId || null;
+
+  if (!finalServiceTypeId) {
+    throw new ApiError(400, 'Service type is required');
+  }
+
+  if (!finalServiceCategoryId) {
+    throw new ApiError(400, 'Service category is required');
+  }
+
+  const trimmedName = typeof name === 'string' ? name.trim() : service.name;
+  if (!trimmedName) {
+    throw new ApiError(400, 'Service name is required');
+  }
+
+  let imageUrl = service.primaryImage || service.image || '';
+
+  if (req.file) {
+    imageUrl = saveImageFile(req.file, 'services');
+  } else if (typeof image === 'string' && image.startsWith('data:image/')) {
+    imageUrl = saveBase64Image(image, { subDir: 'services' });
+  } else if (typeof primaryImage === 'string') {
+    imageUrl = primaryImage;
+  } else if (typeof image === 'string') {
+    imageUrl = image;
+  }
+
+  if (name !== undefined) service.name = trimmedName;
+  if (description !== undefined) service.description = String(description).trim();
+
+  service.startingPrice = finalStartingPrice;
+  service.price = finalStartingPrice;
+  service.durationMinutes = finalDurationMinutes;
+  service.duration = String(finalDurationMinutes);
+  service.discountPercentage = finalDiscountPercentage;
+  service.serviceTypeId = finalServiceTypeId;
+  service.serviceCategoryId = finalServiceCategoryId;
+  service.categoryId = finalServiceCategoryId;
+  service.primaryImage = imageUrl;
+  service.image = imageUrl;
+  service.images = imageUrl ? [imageUrl, ...(service.images || []).filter((img) => img !== imageUrl)] : [];
+  service.updatedAt = new Date();
+
   await provider.save();
+
+  let serviceDoc = await Service.findById(req.params.serviceId);
+  if (!serviceDoc) {
+    serviceDoc = new Service({
+      _id: req.params.serviceId,
+      providerId: provider._id,
+      serviceTypeId: finalServiceTypeId,
+      serviceCategoryId: finalServiceCategoryId,
+      categoryId: finalServiceCategoryId,
+      name: trimmedName,
+      description: service.description || '',
+      startingPrice: finalStartingPrice,
+      price: finalStartingPrice,
+      durationMinutes: finalDurationMinutes,
+      duration: String(finalDurationMinutes),
+      discountPercentage: finalDiscountPercentage,
+      primaryImage: imageUrl,
+      image: imageUrl,
+      images: imageUrl ? [imageUrl] : [],
+      isActive: true,
+    });
+  }
+
+  serviceDoc.name = trimmedName;
+  serviceDoc.description = service.description || '';
+  serviceDoc.startingPrice = finalStartingPrice;
+  serviceDoc.price = finalStartingPrice;
+  serviceDoc.durationMinutes = finalDurationMinutes;
+  serviceDoc.duration = String(finalDurationMinutes);
+  serviceDoc.discountPercentage = finalDiscountPercentage;
+  serviceDoc.serviceTypeId = finalServiceTypeId;
+  serviceDoc.serviceCategoryId = finalServiceCategoryId;
+  serviceDoc.categoryId = finalServiceCategoryId;
+  serviceDoc.primaryImage = imageUrl;
+  serviceDoc.image = imageUrl;
+  serviceDoc.images = imageUrl ? [imageUrl, ...(serviceDoc.images || []).filter((img) => img !== imageUrl)] : [];
+  serviceDoc.isActive = true;
+
+  await serviceDoc.save();
 
   provider.availability = normalizeAvailability(provider.availability);
 
   res.status(200).json(
-    new ApiResponse(200, { provider }, 'Service updated successfully')
+    new ApiResponse(200, { provider, service: serviceDoc }, 'Service updated successfully')
   );
 });
 
@@ -419,6 +805,9 @@ export const deleteService = asyncHandler(async (req, res) => {
 
   service.deleteOne();
   await provider.save();
+
+  // Deactivate/delete in standalone Service collection
+  await Service.findByIdAndDelete(req.params.serviceId);
 
   provider.availability = normalizeAvailability(provider.availability);
 

@@ -59,6 +59,18 @@ export const createBooking = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Service not found or inactive');
   }
 
+  // Check for booking conflicts - prevent double booking the same time slot
+  const conflict = await Booking.findOne({
+    providerId,
+    scheduledDate: new Date(scheduledDate).toISOString().split('T')[0],
+    scheduledTime,
+    status: { '': ['pending', 'accepted', 'working'] }
+  });
+  
+  if (conflict) {
+    throw new ApiError(409, 'Time slot already booked for this provider');
+  }
+
   const booking = await Booking.create({
     bookingId: generateBookingId(),
     customerId: req.user._id,
