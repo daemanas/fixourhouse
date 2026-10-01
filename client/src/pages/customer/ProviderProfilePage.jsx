@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Award, BadgeCheck, Briefcase, Calendar, Camera, CheckCircle2,
   ChevronLeft, ChevronRight, Clock, Heart, Image as ImageIcon, Loader2,
-  MapPin, MessageSquare, Share2, ShieldCheck, Star, Users, ThumbsUp
+  MapPin, MessageSquare, Play, Share2, ShieldCheck, Star, Users, ThumbsUp, Video
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Card from '../../components/ui/Card';
@@ -35,6 +35,14 @@ const servicePrice = (service) => Number(service?.price ?? service?.startingPric
 const discountedPrice = (service) => {
   const base = servicePrice(service);
   return Math.round(base * (1 - Number(service?.discountPercentage || 0) / 100) * 100) / 100;
+};
+
+const galleryImageKey = (src) => {
+  try {
+    return new URL(resolveAssetUrl(src), window.location.origin).pathname;
+  } catch {
+    return String(src || '');
+  }
 };
 
 const getTodayAvailability = (availability) => {
@@ -135,30 +143,59 @@ export function ProviderProfilePage() {
   const galleryItems = useMemo(() => {
     if (!provider) return [];
     const items = [];
-    (provider.gallery || []).forEach((image, index) => {
-      if (image) items.push({ id: `provider-${index}-${image}`, src: image, title: `Provider work ${index + 1}`, category: 'Work Photos' });
-    });
-    services.forEach((service) => {
-      [service.primaryImage, service.image, ...(service.images || [])].filter(Boolean).forEach((image, index) => {
-        items.push({ id: `service-${service._id}-${index}-${image}`, src: image, title: service.name, category: 'Services' });
-      });
-    });
+    const seen = new Set();
+    const addImage = (item) => {
+      const key = [item.src, item.afterImageSrc].filter(Boolean).map(galleryImageKey).join('|');
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      items.push(item);
+    };
     completedPhotos.forEach((photo, photoIndex) => {
       (photo.images || [photo.image, photo.url].filter(Boolean)).forEach((image, imageIndex) => {
-        if (image) items.push({
+        addImage({
           id: `completed-${photo._id || photoIndex}-${imageIndex}-${image}`,
           src: image,
           title: photo.caption || photo.serviceId?.name || 'Completed job',
           category: 'Completed Jobs',
+          sourceType: 'completed_job',
         });
       });
     });
-    return items.filter((item, index, all) => all.findIndex((candidate) => candidate.src === item.src) === index);
+    (provider.galleryPhotos || []).forEach((photo, index) => addImage({
+      id: `provider-gallery-${photo._id || index}`,
+      src: photo.imageUrl,
+      afterImageSrc: photo.afterImageUrl,
+      beforeImageSrc: photo.beforeImageUrl,
+      title: photo.originalName || 'Provider photo',
+      category: 'Provider Photos',
+      sourceType: 'provider_gallery',
+      mediaType: photo.mediaType || 'image',
+      mediaCategory: photo.category || 'work_photos',
+      isFeatured: Boolean(photo.isFeatured),
+    }));
+    (provider.gallery || []).forEach((image, index) => addImage({
+      id: `legacy-provider-${index}-${image}`,
+      src: image,
+      title: `Provider photo ${index + 1}`,
+      category: 'Provider Photos',
+      sourceType: 'provider_gallery',
+    }));
+    return items;
   }, [provider, services, completedPhotos]);
 
   const visibleGallery = galleryCategory === 'All' ? galleryItems : galleryItems.filter((item) => item.category === galleryCategory);
-  const galleryCategories = ['All', ...new Set(galleryItems.map((item) => item.category))];
-  const heroImage = galleryItems.length ? galleryItems[heroIndex % galleryItems.length] : null;
+  const completedPhotoCount = galleryItems.filter((item) => item.sourceType === 'completed_job').length;
+  const providerPhotoCount = galleryItems.filter((item) => item.sourceType === 'provider_gallery').length;
+  const galleryCategories = [
+    { id: 'All', count: galleryItems.length },
+    { id: 'Completed Jobs', count: completedPhotoCount },
+    { id: 'Provider Photos', count: providerPhotoCount },
+  ];
+  const featuredIndex = galleryItems.findIndex((item) => item.isFeatured);
+  const displayedHeroIndex = galleryItems.length
+    ? (Math.max(featuredIndex, 0) + heroIndex) % galleryItems.length
+    : 0;
+  const heroImage = galleryItems.length ? galleryItems[displayedHeroIndex] : null;
   const lightboxImage = lightboxIndex === null ? null : galleryItems[lightboxIndex];
   const rating = Number(provider?.rating || 0);
   const reviewCount = Number(provider?.reviewCount ?? reviewPagination?.total ?? 0);
@@ -283,7 +320,9 @@ export function ProviderProfilePage() {
       {/* Hero Header */}
       <div className="relative isolate aspect-[1.7/1] max-h-[420px] overflow-hidden rounded-3xl bg-slate-100 dark:bg-slate-900">
         {heroImage ? (
-          <img src={resolveAssetUrl(heroImage.src)} alt={heroImage.title} className="h-full w-full cursor-zoom-in object-cover" onClick={() => setLightboxIndex(heroIndex % galleryItems.length)} />
+          heroImage.mediaType === 'video' ? <video src={resolveAssetUrl(heroImage.src)} controls className="h-full w-full object-cover" />
+            : heroImage.beforeImageSrc && heroImage.afterImageSrc ? <button type="button" onClick={() => setLightboxIndex(displayedHeroIndex)} className="grid h-full w-full grid-cols-2 overflow-hidden" aria-label="View before and after photos"><img src={resolveAssetUrl(heroImage.beforeImageSrc)} alt="Before" className="h-full w-full border-r-2 border-white object-cover" /><img src={resolveAssetUrl(heroImage.afterImageSrc)} alt="After" className="h-full w-full object-cover" /><span className="absolute left-1/2 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-900"><ChevronRight className="h-5 w-5" /></span></button>
+              : <img src={resolveAssetUrl(heroImage.src)} alt={heroImage.title} className="h-full w-full cursor-zoom-in object-cover" onClick={() => setLightboxIndex(displayedHeroIndex)} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 bg-slate-100 text-slate-500 dark:bg-slate-900 dark:text-slate-400">
             <ImageIcon className="h-10 w-10" />
@@ -306,9 +345,13 @@ export function ProviderProfilePage() {
         {galleryItems.length > 0 && (
           <div className="absolute bottom-4 right-4 z-10 flex items-center gap-1.5 rounded-full bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
             <Camera className="h-3.5 w-3.5" />
-            {(heroIndex % galleryItems.length) + 1}/{galleryItems.length}
+            {displayedHeroIndex + 1}/{galleryItems.length}
           </div>
         )}
+        {galleryItems.length > 1 && <>
+          <button type="button" onClick={() => setHeroIndex((index) => (index - 1 + galleryItems.length) % galleryItems.length)} aria-label="Previous provider photo" className="absolute left-4 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-900"><ChevronLeft className="h-5 w-5" /></button>
+          <button type="button" onClick={() => setHeroIndex((index) => (index + 1) % galleryItems.length)} aria-label="Next provider photo" className="absolute right-4 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-900"><ChevronRight className="h-5 w-5" /></button>
+        </>}
       </div>
 
       {/* Provider Details Card */}
@@ -546,24 +589,27 @@ export function ProviderProfilePage() {
       {/* TAB CONTENT: GALLERY */}
       {activeTab === 'gallery' && (
         <section className="space-y-4">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">Gallery</h2>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Gallery ({galleryItems.length})</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Completed Jobs ({completedPhotoCount}) · Provider Photos ({providerPhotoCount})</p>
+          </div>
           {galleryItems.length === 0 ? (
-            <Card className="p-8 text-center text-sm text-slate-500">No gallery images available.</Card>
+            <Card className="p-8 text-center text-sm text-slate-500">No work photos yet.</Card>
           ) : (
             <>
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                 {galleryCategories.map((category) => (
                   <button
-                    key={category}
+                    key={category.id}
                     type="button"
-                    onClick={() => setGalleryCategory(category)}
+                    onClick={() => setGalleryCategory(category.id)}
                     className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-                      galleryCategory === category
+                      galleryCategory === category.id
                         ? 'bg-emerald-600 text-white'
                         : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
                     }`}
                   >
-                    {category}
+                    {category.id} ({category.count})
                   </button>
                 ))}
               </div>
@@ -575,8 +621,11 @@ export function ProviderProfilePage() {
                     onClick={() => setLightboxIndex(galleryItems.findIndex((image) => image.id === item.id))}
                     className="group relative aspect-[4/3] overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-800 text-left"
                   >
-                    <img src={resolveAssetUrl(item.src)} alt={item.title} loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                    <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6 text-[10px] font-medium text-white">{item.title}</span>
+                    {item.mediaType === 'video' ? <><video src={resolveAssetUrl(item.src)} preload="metadata" muted className="h-full w-full object-cover" /><span className="absolute inset-0 flex items-center justify-center"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white"><Play className="ml-0.5 h-5 w-5 fill-current" /></span></span></>
+                      : item.beforeImageSrc && item.afterImageSrc ? <div className="grid h-full grid-cols-2"><img src={resolveAssetUrl(item.beforeImageSrc)} alt="Before" loading="lazy" className="h-full w-full border-r-2 border-white object-cover" /><img src={resolveAssetUrl(item.afterImageSrc)} alt="After" loading="lazy" className="h-full w-full object-cover" /><span className="absolute left-1/2 top-1/2 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-900"><ChevronRight className="h-4 w-4" /></span></div>
+                        : <img src={resolveAssetUrl(item.src)} alt={item.title} loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />}
+                    <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6 text-[10px] font-medium text-white">{item.title}{item.mediaCategory ? ` · ${item.mediaCategory.replaceAll('_', ' ')}` : ''}</span>
+                    <span className="absolute left-2 top-2 rounded-full bg-slate-950/70 px-2 py-1 text-[10px] font-semibold text-white">{item.sourceType === 'completed_job' ? 'Completed Job' : 'Provider Photo'}</span>
                   </button>
                 ))}
               </div>
@@ -672,18 +721,17 @@ export function ProviderProfilePage() {
       {/* Lightbox Modal */}
       <Modal isOpen={lightboxImage !== null} onClose={() => setLightboxIndex(null)} title={lightboxImage?.title || 'Provider gallery'} size="xl" className="bg-slate-950 text-white">
         {lightboxImage && (
-          <div className="relative flex min-h-[40vh] items-center justify-center bg-black">
-            <img src={resolveAssetUrl(lightboxImage.src)} alt={lightboxImage.title} className="max-h-[70vh] max-w-full object-contain" />
-            {galleryItems.length > 1 && (
-              <>
-                <button type="button" onClick={() => setLightboxIndex((index) => (index - 1 + galleryItems.length) % galleryItems.length)} className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25">
-                  <ChevronLeft className="h-6 w-6" />
-                </button>
-                <button type="button" onClick={() => setLightboxIndex((index) => (index + 1) % galleryItems.length)} className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25">
-                  <ChevronRight className="h-6 w-6" />
-                </button>
-              </>
-            )}
+          <div className="space-y-3">
+            <div className="relative flex min-h-[40vh] items-center justify-center bg-black">
+              {lightboxImage.mediaType === 'video' ? <video src={resolveAssetUrl(lightboxImage.src)} controls autoPlay className="max-h-[70vh] max-w-full" />
+                : lightboxImage.beforeImageSrc && lightboxImage.afterImageSrc ? <div className="grid max-h-[70vh] grid-cols-2 gap-1"><figure className="relative"><img src={resolveAssetUrl(lightboxImage.beforeImageSrc)} alt="Before" className="max-h-[70vh] w-full object-contain" /><figcaption className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 text-xs text-white">Before</figcaption></figure><figure className="relative"><img src={resolveAssetUrl(lightboxImage.afterImageSrc)} alt="After" className="max-h-[70vh] w-full object-contain" /><figcaption className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 text-xs text-white">After</figcaption></figure></div>
+                  : <img src={resolveAssetUrl(lightboxImage.src)} alt={lightboxImage.title} className="max-h-[70vh] max-w-full object-contain" />}
+              {galleryItems.length > 1 && <>
+                <button type="button" onClick={() => setLightboxIndex((index) => (index - 1 + galleryItems.length) % galleryItems.length)} aria-label="Previous photo" className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"><ChevronLeft className="h-6 w-6" /></button>
+                <button type="button" onClick={() => setLightboxIndex((index) => (index + 1) % galleryItems.length)} aria-label="Next photo" className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"><ChevronRight className="h-6 w-6" /></button>
+              </>}
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-300"><span>{lightboxImage.sourceType === 'completed_job' ? 'Completed Job' : 'Provider Photo'}</span><span>{lightboxIndex + 1} / {galleryItems.length}</span></div>
           </div>
         )}
       </Modal>

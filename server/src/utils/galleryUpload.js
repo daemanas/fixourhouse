@@ -24,18 +24,15 @@ function ensureDirSync(dir) {
   fs.mkdirSync(dir, { recursive: true });
 }
 
-// Persist an in-memory Multer file buffer to disk and return the public
-// relative URL (e.g. "/uploads/gallery/1699...a1b2.jpg"). Validation of the
-// MIME type/extension is enforced here as a second layer of defense so the
-// stored bytes actually match an allowed image format.
+// Persist an in-memory Multer file buffer and return its public relative URL.
 export const saveGalleryFile = (file) => {
   if (!file || !Buffer.isBuffer(file.buffer)) {
-    throw new ApiError(400, 'Invalid image upload.');
+    throw new ApiError(400, 'Invalid media upload.');
   }
 
   const ext = resolveGalleryExtension(file);
   if (!GALLERY_ALLOWED_MIME.has(file.mimetype)) {
-    throw new ApiError(400, 'Only JPG, JPEG, PNG and WebP images are allowed.');
+    throw new ApiError(400, 'Only JPG, PNG, WebP, MP4 and WebM files are allowed.');
   }
 
   ensureDirSync(GALLERY_UPLOAD_DIR);

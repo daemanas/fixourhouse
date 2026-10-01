@@ -45,7 +45,7 @@ const providerNavigationGroups = [
   { heading: 'Account', labels: ['Profile', 'Settings'] },
 ];
 
-export function Sidebar({ items, isOpen, onClose }) {
+export function Sidebar({ items, isOpen, onClose, desktopOnly = false }) {
   const { user, logout } = useAuth();
   const { unreadCount } = useNotifications();
   const { theme, toggleTheme } = useTheme();
@@ -135,7 +135,7 @@ export function Sidebar({ items, isOpen, onClose }) {
   return (
     <>
       {/* Mobile overlay */}
-      {isOpen && (
+      {isOpen && !desktopOnly && (
         <div
           className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
           onClick={onClose}
@@ -143,9 +143,7 @@ export function Sidebar({ items, isOpen, onClose }) {
       )}
 
       <aside
-        className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-72 ${sidebarCollapsed ? 'lg:w-[84px]' : 'lg:w-72'} bg-white dark:bg-gray-900 border-r border-border-light dark:border-border-dark flex flex-col transition-all duration-300 lg:translate-x-0 ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`${desktopOnly ? 'hidden lg:sticky lg:flex' : 'fixed lg:sticky'} top-0 left-0 z-50 h-screen w-72 ${sidebarCollapsed ? 'lg:w-[84px]' : 'lg:w-72'} bg-white dark:bg-gray-900 border-r border-border-light dark:border-border-dark flex-col transition-all duration-300 lg:translate-x-0 ${desktopOnly ? '' : isOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
         {/* Logo */}
         <div className={`flex h-16 items-center border-b border-border-light dark:border-border-dark ${sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-5'}`}>

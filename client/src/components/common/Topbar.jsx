@@ -4,7 +4,7 @@ import Avatar from '../ui/Avatar';
 import { useAuth } from '../../context/AuthContext';
 import NotificationMenu from './NotificationMenu';
 
-export function Topbar({ title, subtitle, onMenuClick, showSearch = false, compact = false, customerDashboard = false }) {
+export function Topbar({ title, subtitle, onMenuClick, showSearch = false, compact = false, customerDashboard = false, hideMenuButton = false }) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const locationData = user?.locationData || {};
@@ -18,13 +18,13 @@ export function Topbar({ title, subtitle, onMenuClick, showSearch = false, compa
     <header className="sticky top-0 z-30 bg-white/90 dark:bg-gray-900/90 backdrop-blur-lg border-b border-border-light dark:border-border-dark">
       <div className={`flex items-center justify-between ${compact ? 'h-14 px-4' : customerDashboard ? 'h-16 px-3 sm:px-4' : 'h-16 px-4 sm:px-6 lg:px-8'}`}>
         <div className={`flex min-w-0 items-center ${customerDashboard ? 'gap-2 sm:gap-3' : 'gap-4'}`}>
-          <button
+          {!hideMenuButton && <button
             onClick={onMenuClick}
             className={`${compact ? '' : 'lg:hidden'} p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300`}
             aria-label="Open menu"
           >
             <Menu className="h-5 w-5" />
-          </button>
+          </button>}
           {customerDashboard ? (
             <button type="button" onClick={() => navigate('/customer/profile')} aria-label={`Change service location. Current location: ${savedCity}`} className="flex min-w-0 items-center gap-2 rounded-lg px-1 py-1 text-left hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:hover:bg-gray-800 sm:gap-3">
               <MapPin className="h-5 w-5 shrink-0 text-emerald-700 dark:text-emerald-400" aria-hidden="true" />

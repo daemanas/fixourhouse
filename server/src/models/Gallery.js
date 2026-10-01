@@ -24,6 +24,28 @@ const gallerySchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    mediaType: {
+      type: String,
+      enum: ['image', 'video'],
+      default: 'image',
+    },
+    category: {
+      type: String,
+      enum: ['work_photos', 'before_after', 'tools_equipment', 'others'],
+      default: 'work_photos',
+    },
+    isFeatured: {
+      type: Boolean,
+      default: false,
+    },
+    beforeImageUrl: {
+      type: String,
+      default: '',
+    },
+    afterImageUrl: {
+      type: String,
+      default: '',
+    },
   },
   {
     timestamps: true,

@@ -115,7 +115,7 @@ import ApiError from '../utils/ApiError.js';
 // Gallery upload configuration
 // ---------------------------------------------------------------------------
 
-export const GALLERY_MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB per image
+export const GALLERY_MAX_FILE_BYTES = 25 * 1024 * 1024;
 export const GALLERY_MAX_FILES = 10; // max 10 images per request
 
 // Allowed image MIME types
@@ -124,6 +124,8 @@ export const GALLERY_ALLOWED_MIME = new Map([
   ['image/jpg', 'jpg'],
   ['image/png', 'png'],
   ['image/webp', 'webp'],
+  ['video/mp4', 'mp4'],
+  ['video/webm', 'webm'],
 ]);
 
 // Use memory storage.
@@ -139,7 +141,7 @@ const fileFilter = (req, file, cb) => {
     return cb(
       new ApiError(
         400,
-        'Only JPG, JPEG, PNG and WebP images are allowed.'
+        'Only JPG, PNG, WebP, MP4 and WebM files are allowed.'
       )
     );
   }

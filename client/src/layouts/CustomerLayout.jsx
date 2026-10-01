@@ -33,6 +33,7 @@ export function CustomerLayout() {
       title="My LocalFix"
       subtitle="Find and manage trusted local services"
       showSearch
+      customerLayout
       customerDashboardHeader={location.pathname === '/customer/dashboard'}
     />
   );

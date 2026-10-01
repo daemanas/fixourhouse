@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Provider from '../models/Provider.js';
+import Gallery from '../models/Gallery.js';
 import User from '../models/User.js';
 import Booking from '../models/Booking.js';
 import Service from '../models/Service.js';
@@ -151,9 +152,14 @@ export const getProviderById = asyncHandler(async (req, res) => {
   if (showPhone) {
     await provider.populate('userId', 'name avatar phone');
   }
+  const galleryPhotos = await Gallery.find({ providerId: provider._id })
+    .sort({ isFeatured: -1, createdAt: -1 })
+    .lean();
+  const providerData = provider.toObject();
+  providerData.galleryPhotos = galleryPhotos.map((photo) => ({ ...photo, sourceType: 'provider_gallery' }));
 
   res.status(200).json(
-    new ApiResponse(200, { provider }, 'Provider fetched successfully')
+    new ApiResponse(200, { provider: providerData }, 'Provider fetched successfully')
   );
 });
 
