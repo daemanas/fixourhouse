@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Award, BadgeCheck, Briefcase, Calendar, Camera, CheckCircle2,
   ChevronLeft, ChevronRight, Clock, Heart, Image as ImageIcon, Loader2,
@@ -17,8 +17,10 @@ import { getProviderById } from '../../services/providerService';
 import { getProviderReviews } from '../../services/reviewService';
 import { getCompletedServicePhotos } from '../../services/completedPhotoService';
 import { getWishlist, toggleWishlist } from '../../services/userService';
+import { useAuth } from '../../context/AuthContext';
 import { summarizeAvailability, formatTime12h } from '../../utils/availability';
 import resolveAssetUrl from '../../utils/assetUrl';
+import { redirectToLogin } from '../../utils/authRedirect';
 
 const formatDate = (date) => date
   ? new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -61,6 +63,8 @@ const getTodayAvailability = (availability) => {
 export function ProviderProfilePage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const routeLocation = useLocation();
+  const { isAuthenticated } = useAuth();
   const [provider, setProvider] = useState(null);
   const [reviews, setReviews] = useState([]);
   const [reviewPagination, setReviewPagination] = useState(null);
@@ -71,8 +75,14 @@ export function ProviderProfilePage() {
   const [moreReviewsLoading, setMoreReviewsLoading] = useState(false);
   const [wishlisted, setWishlisted] = useState(false);
   const [wishlistLoading, setWishlistLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [selectedServiceId, setSelectedServiceId] = useState('');
+  const [activeTab, setActiveTab] = useState(() => (
+    routeLocation.pathname.endsWith('/services') ? 'services'
+      : routeLocation.pathname.endsWith('/gallery') ? 'gallery'
+        : 'overview'
+  ));
+  const [selectedServiceId, setSelectedServiceId] = useState(
+    () => String(routeLocation.state?.bookingServiceId || '')
+  );
   const [aboutExpanded, setAboutExpanded] = useState(false);
   const [galleryCategory, setGalleryCategory] = useState('All');
   const [heroIndex, setHeroIndex] = useState(0);
@@ -85,7 +95,9 @@ export function ProviderProfilePage() {
       const response = await getProviderById(id);
       const nextProvider = response.data?.data?.provider;
       setProvider(nextProvider || null);
-      setSelectedServiceId(String(nextProvider?.services?.find((service) => service.isActive !== false)?._id || ''));
+      const returnServiceId = routeLocation.state?.bookingServiceId;
+      const firstServiceId = nextProvider?.services?.find((service) => service.isActive !== false)?._id;
+      setSelectedServiceId(String(returnServiceId || firstServiceId || ''));
       setHeroIndex(0);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load provider profile.');
@@ -93,7 +105,7 @@ export function ProviderProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, routeLocation.state?.bookingServiceId]);
 
   const fetchReviews = useCallback(async () => {
     setReviewsLoading(true);
@@ -121,6 +133,10 @@ export function ProviderProfilePage() {
   }, [id]);
 
   const fetchWishlist = useCallback(async () => {
+    if (!isAuthenticated) {
+      setWishlisted(false);
+      return;
+    }
     try {
       const response = await getWishlist();
       const wishlist = response.data?.data?.wishlist || [];
@@ -128,7 +144,7 @@ export function ProviderProfilePage() {
     } catch {
       setWishlisted(false);
     }
-  }, [id]);
+  }, [id, isAuthenticated]);
 
   useEffect(() => {
     fetchProvider();
@@ -208,6 +224,10 @@ export function ProviderProfilePage() {
   const selectedFinalPrice = selectedService ? discountedPrice(selectedService) : 0;
 
   const toggleProviderFavorite = async () => {
+    if (!isAuthenticated) {
+      redirectToLogin(navigate, routeLocation);
+      return;
+    }
     if (wishlistLoading) return;
     setWishlistLoading(true);
     try {
@@ -234,7 +254,12 @@ export function ProviderProfilePage() {
   };
 
   const bookService = (service = selectedService) => {
-    if (service?._id && provider?._id) navigate(`/customer/book/${provider._id}?service=${service._id}`);
+    if (!service?._id || !provider?._id) return;
+    if (!isAuthenticated) {
+      redirectToLogin(navigate, routeLocation, { bookingServiceId: service._id });
+      return;
+    }
+    navigate(`/customer/book/${provider._id}?service=${service._id}`);
   };
 
   const loadMoreReviews = async () => {
@@ -377,15 +402,20 @@ export function ProviderProfilePage() {
             </div>
           </div>
           {whatsappNumber && (
-            <a
-              href={`https://wa.me/${whatsappNumber}`}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={() => {
+                if (!isAuthenticated) {
+                  redirectToLogin(navigate, routeLocation);
+                  return;
+                }
+                window.open(`https://wa.me/${whatsappNumber}`, '_blank', 'noopener,noreferrer');
+              }}
               className="inline-flex items-center justify-center gap-2 rounded-full border border-emerald-600 px-5 py-2 text-sm font-semibold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
             >
               <MessageSquare className="h-4 w-4" />
               Chat
-            </a>
+            </button>
           )}
         </div>
 
@@ -544,10 +574,22 @@ export function ProviderProfilePage() {
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">Customer Reviews</h2>
-            <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 dark:bg-amber-950/40">
-              <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-              <span className="text-sm font-bold text-slate-900 dark:text-white">{rating > 0 ? rating.toFixed(1) : '4.8'}</span>
-              <span className="text-xs text-slate-500">({reviewCount} reviews)</span>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 dark:bg-amber-950/40">
+                <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                <span className="text-sm font-bold text-slate-900 dark:text-white">{rating > 0 ? rating.toFixed(1) : '4.8'}</span>
+                <span className="text-xs text-slate-500">({reviewCount} reviews)</span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  if (!isAuthenticated) redirectToLogin(navigate, routeLocation);
+                  else navigate('/customer/bookings');
+                }}
+              >
+                Write a Review
+              </Button>
             </div>
           </div>
           {reviewsLoading ? (

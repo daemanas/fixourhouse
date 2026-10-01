@@ -57,6 +57,17 @@ export function OtpPage() {
   };
 
   const redirectAfterVerify = (role) => {
+    const from = location.state?.from;
+    if (role === 'customer' && from?.pathname) {
+      navigate(`${from.pathname}${from.search || ''}${from.hash || ''}`, {
+        replace: true,
+        state: location.state?.bookingServiceId
+          ? { bookingServiceId: location.state.bookingServiceId }
+          : undefined,
+      });
+      return;
+    }
+
     switch (role) {
       case 'admin':
         navigate('/admin/analytics', { replace: true });

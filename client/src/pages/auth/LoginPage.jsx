@@ -23,8 +23,13 @@ export function LoginPage() {
 
   const redirectAfterLogin = (role) => {
     const from = location.state?.from?.pathname;
-    if (from) {
-      navigate(from, { replace: true });
+    if (from && role === 'customer') {
+      navigate(`${from}${location.state?.from?.search || ''}${location.state?.from?.hash || ''}`, {
+        replace: true,
+        state: location.state?.bookingServiceId
+          ? { bookingServiceId: location.state.bookingServiceId }
+          : undefined,
+      });
       return;
     }
     switch (role) {
@@ -161,6 +166,7 @@ export function LoginPage() {
               Don't have an account?{' '}
               <Link
                 to="/auth/register"
+                state={location.state}
                 className="font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700"
               >
                 Register now

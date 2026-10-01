@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, MapPin, Menu, Search } from 'lucide-react';
 import Avatar from '../ui/Avatar';
 import { useAuth } from '../../context/AuthContext';
@@ -6,7 +6,8 @@ import NotificationMenu from './NotificationMenu';
 
 export function Topbar({ title, subtitle, onMenuClick, showSearch = false, compact = false, customerDashboard = false, hideMenuButton = false }) {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const location = useLocation();
+  const { user, isAuthenticated } = useAuth();
   const locationData = user?.locationData || {};
   const savedCity = [locationData.city, locationData.state].filter(Boolean).join(', ') || user?.location || 'Add your location';
   const savedArea = [locationData.area || locationData.address, locationData.district]
@@ -52,9 +53,20 @@ export function Topbar({ title, subtitle, onMenuClick, showSearch = false, compa
             </div>
           )}
           <NotificationMenu />
-          {customerDashboard && <Link to="/customer/profile" aria-label="Open customer profile" className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2">
-            <Avatar src={user?.avatar} name={user?.name || 'Customer'} size="sm" alt="Customer profile" />
-          </Link>}
+          {!isAuthenticated ? (
+            <div className="flex items-center gap-2">
+              <Link to="/auth/login" state={{ from: location }} className="rounded-lg px-2 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-300 dark:hover:bg-emerald-950/40">
+                Login
+              </Link>
+              <Link to="/auth/register" state={{ from: location }} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2">
+                Sign Up
+              </Link>
+            </div>
+          ) : customerDashboard && (
+            <Link to="/customer/profile" aria-label="Open customer profile" className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2">
+              <Avatar src={user?.avatar} name={user?.name || 'Customer'} size="sm" alt="Customer profile" />
+            </Link>
+          )}
         </div>
       </div>
     </header>

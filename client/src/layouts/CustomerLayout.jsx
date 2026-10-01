@@ -1,5 +1,6 @@
 import DashboardLayout from './DashboardLayout';
 import { useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard,
   Search,
@@ -26,6 +27,7 @@ const items = [
 
 export function CustomerLayout() {
   const location = useLocation();
+  const { isAuthenticated } = useAuth();
 
   return (
     <DashboardLayout
@@ -34,7 +36,8 @@ export function CustomerLayout() {
       subtitle="Find and manage trusted local services"
       showSearch
       customerLayout
-      customerDashboardHeader={location.pathname === '/customer/dashboard'}
+      showCustomerHeader={!isAuthenticated}
+      customerDashboardHeader={['/', '/customer', '/customer/dashboard'].includes(location.pathname)}
     />
   );
 }

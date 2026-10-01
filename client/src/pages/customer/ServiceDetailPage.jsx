@@ -1,4 +1,4 @@
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import {
   Wrench,
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
+import { redirectToLogin } from '../../utils/authRedirect';
 import { getServiceById, getServiceReviews } from '../../services/serviceService';
 import { createBooking } from '../../services/bookingService';
 import resolveAssetUrl from '../../utils/assetUrl';
@@ -41,7 +42,8 @@ const toApiTime = (displayTime) => {
 export function ServiceDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const location = useLocation();
+  const { user, isAuthenticated } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -134,9 +136,8 @@ export function ServiceDetailPage() {
   };
 
   const handleOpenBooking = (providerTier = null) => {
-    if (!user) {
-      toast.error('Please sign in as a customer to book services');
-      navigate('/auth/login');
+    if (!isAuthenticated) {
+      redirectToLogin(navigate, location);
       return;
     }
 
@@ -180,6 +181,10 @@ export function ServiceDetailPage() {
 
   const handleCreateBooking = async (e) => {
     e.preventDefault();
+    if (!isAuthenticated) {
+      redirectToLogin(navigate, location);
+      return;
+    }
     if (!selectedDate || !selectedTime) {
       toast.error('Please select date and time slot');
       return;
@@ -542,9 +547,21 @@ export function ServiceDetailPage() {
 
       {/* Customer Reviews Section */}
       <section className="space-y-6 border-t border-gray-100 pt-6 dark:border-gray-800" aria-labelledby="service-reviews-heading">
-        <h2 className="text-xl sm:text-2xl font-bold text-ink-light dark:text-ink-dark">
-          Customer Reviews &amp; Ratings ({totalReviews})
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="service-reviews-heading" className="text-xl sm:text-2xl font-bold text-ink-light dark:text-ink-dark">
+            Customer Reviews &amp; Ratings ({totalReviews})
+          </h2>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              if (!isAuthenticated) redirectToLogin(navigate, location);
+              else navigate('/customer/bookings');
+            }}
+          >
+            Write a Review
+          </Button>
+        </div>
 
         <div className="grid grid-cols-1 gap-5 rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-card-dark sm:p-6 md:grid-cols-3">
           <div className="flex flex-col items-center justify-center text-center border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-800 pr-0 md:pr-6 pb-4 md:pb-0">

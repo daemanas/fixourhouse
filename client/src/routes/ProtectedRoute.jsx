@@ -1,5 +1,6 @@
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import env from '../config/env';
 
 export function ProtectedRoute({ children, roles = [] }) {
   const { isAuthenticated, user, loading } = useAuth();
@@ -18,8 +19,13 @@ export function ProtectedRoute({ children, roles = [] }) {
   }
 
   if (roles.length > 0 && !roles.includes(user?.role)) {
-    return <Navigate to="/" replace />;
+    const redirectPath = user?.role === env.ROLES.ADMIN
+      ? '/admin/analytics'
+      : user?.role === env.ROLES.PROVIDER
+        ? '/provider/dashboard'
+        : '/';
+    return <Navigate to={redirectPath} replace />;
   }
 
-  return children;
+  return children || <Outlet />;
 }

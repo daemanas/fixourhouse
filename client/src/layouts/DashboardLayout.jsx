@@ -4,7 +4,7 @@ import Sidebar from '../components/common/Sidebar';
 import Topbar from '../components/common/Topbar';
 import CustomerBottomNav from '../components/common/CustomerBottomNav';
 
-export function DashboardLayout({ items, title, subtitle, showSearch = false, compactHeader = false, customerDashboardHeader = false, customerLayout = false }) {
+export function DashboardLayout({ items, title, subtitle, showSearch = false, compactHeader = false, customerDashboardHeader = false, customerLayout = false, showCustomerHeader = false }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
@@ -16,7 +16,7 @@ export function DashboardLayout({ items, title, subtitle, showSearch = false, co
         desktopOnly={customerLayout}
       />
       <div className="flex-1 flex flex-col min-w-0">
-        {(!customerLayout || customerDashboardHeader) && <Topbar
+        {(!customerLayout || customerDashboardHeader || showCustomerHeader) && <Topbar
           title={title}
           subtitle={subtitle}
           showSearch={showSearch}

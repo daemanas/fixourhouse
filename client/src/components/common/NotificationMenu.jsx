@@ -20,11 +20,13 @@ const notificationsPath = (role) => role === 'admin'
     : '/customer/notifications';
 
 export function NotificationMenu() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { notifications, unreadCount, loading, refresh, markRead } = useNotifications();
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef(null);
   const navigate = useNavigate();
+
+  if (!isAuthenticated) return null;
 
   useEffect(() => {
     if (!open) return undefined;

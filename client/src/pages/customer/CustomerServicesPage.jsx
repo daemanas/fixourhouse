@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowUpRight,
   ChevronRight,
@@ -15,6 +15,8 @@ import {
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import { getServiceWishlist, toggleServiceWishlist } from '../../services/userService';
+import { useAuth } from '../../context/AuthContext';
+import { redirectToLogin } from '../../utils/authRedirect';
 import { getServices } from '../../services/serviceService';
 import { getServiceTypes } from '../../services/serviceTypeService';
 import resolveAssetUrl from '../../utils/assetUrl';
@@ -277,6 +279,9 @@ function ServiceSection({ group, onViewAll, favorites, onToggleFavorite }) {
 }
 
 export function CustomerServicesPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { isAuthenticated } = useAuth();
   const [catalogGroups, setCatalogGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -286,6 +291,10 @@ export function CustomerServicesPage() {
   const [favoriteServiceIds, setFavoriteServiceIds] = useState(() => new Set());
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setFavoriteServiceIds(new Set());
+      return undefined;
+    }
     let isCurrent = true;
 
     getServiceWishlist()
@@ -300,7 +309,7 @@ export function CustomerServicesPage() {
     return () => {
       isCurrent = false;
     };
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -379,6 +388,11 @@ export function CustomerServicesPage() {
   const handleToggleFavorite = async (event, serviceId) => {
     event.preventDefault();
     event.stopPropagation();
+    if (!isAuthenticated) {
+      redirectToLogin(navigate, location);
+      return;
+    }
+
     const favoriteId = String(serviceId);
     const wasFavorite = favoriteServiceIds.has(favoriteId);
 

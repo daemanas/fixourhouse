@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
@@ -18,6 +18,7 @@ const roles = [
 export function RegisterPage() {
   const { register: registerUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [role, setRole] = useState('customer');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -50,7 +51,7 @@ export function RegisterPage() {
         locationData,
       });
       toast.success('Account created! Please verify your phone number.');
-      navigate('/auth/otp', { state: { phone: data.phone } });
+      navigate('/auth/otp', { state: { ...location.state, phone: data.phone } });
     } catch (error) {
       toast.error(error.response?.data?.message || 'Registration failed. Please try again.');
     } finally {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
   Bug,
@@ -32,6 +32,7 @@ import {
 import Avatar from '../../components/ui/Avatar';
 import EmptyState from '../../components/ui/EmptyState';
 import { useAuth } from '../../context/AuthContext';
+import { redirectToLogin } from '../../utils/authRedirect';
 import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
 import { getCategories } from '../../services/categoryService';
 import { getProviders } from '../../services/providerService';
@@ -153,7 +154,8 @@ function CardSkeleton({ count = 4, className = 'w-72 shrink-0' }) {
 
 export function CustomerDashboard() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const location = useLocation();
+  const { user, isAuthenticated } = useAuth();
   const { settings } = useWebsiteSettings();
   const savedCity = user?.locationData?.city || user?.location || '';
   const [searchQuery, setSearchQuery] = useState('');
@@ -220,6 +222,10 @@ export function CustomerDashboard() {
   }, [savedCity]);
 
   const loadFavorites = useCallback(async () => {
+    if (!isAuthenticated) {
+      setFavoriteIds(new Set());
+      return;
+    }
     try {
       const response = await getWishlist();
       const wishlist = response.data?.data?.wishlist || [];
@@ -227,7 +233,7 @@ export function CustomerDashboard() {
     } catch {
       setFavoriteIds(new Set());
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     loadCategories();
@@ -247,6 +253,11 @@ export function CustomerDashboard() {
   };
 
   const handleFavorite = async (providerId) => {
+    if (!isAuthenticated) {
+      redirectToLogin(navigate, location);
+      return;
+    }
+
     const id = String(providerId);
     const wasFavorite = favoriteIds.has(id);
     setFavoriteIds((current) => {

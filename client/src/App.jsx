@@ -5,7 +5,6 @@ import { PublicOnlyRoute } from './routes/PublicOnlyRoute';
 import env from './config/env';
 
 // Public pages
-const LandingPage = lazy(() => import('./pages/public/Landing'));
 const AboutPage = lazy(() => import('./pages/public/About'));
 const ContactPage = lazy(() => import('./pages/public/Contact'));
 const PrivacyPage = lazy(() => import('./pages/public/PrivacyPolicy'));
@@ -90,9 +89,23 @@ function App() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        {/* Public routes */}
+        {/* Public customer marketplace */}
+        <Route element={<CustomerLayout />}>
+          <Route path="/" element={<CustomerDashboard />} />
+          <Route path="/customer" element={<CustomerDashboard />} />
+          <Route path="/customer/dashboard" element={<CustomerDashboard />} />
+          <Route path="/customer/services" element={<CustomerServicesPage />} />
+          <Route path="/customer/services/:id" element={<ServiceDetailPage />} />
+          <Route path="/customer/categories" element={<CustomerServicesPage />} />
+          <Route path="/customer/search" element={<SearchPage />} />
+          <Route path="/customer/service/:id" element={<ServiceDetailPage />} />
+          <Route path="/customer/provider/:id" element={<ProviderProfilePage />} />
+          <Route path="/customer/provider/:id/services" element={<ProviderProfilePage />} />
+          <Route path="/customer/provider/:id/gallery" element={<ProviderProfilePage />} />
+        </Route>
+
+        {/* Public informational routes */}
         <Route element={<PublicLayout />}>
-          <Route path="/" element={<LandingPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
@@ -112,13 +125,8 @@ function App() {
           <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
         </Route>
 
-        {/* Customer routes */}
-        <Route element={<ProtectedRoute roles={[env.ROLES.CUSTOMER]}><CustomerLayout /></ProtectedRoute>}>
-          <Route path="/customer/dashboard" element={<CustomerDashboard />} />
-          <Route path="/customer/services" element={<CustomerServicesPage />} />
-          <Route path="/customer/search" element={<SearchPage />} />
-          <Route path="/customer/service/:id" element={<ServiceDetailPage />} />
-          <Route path="/customer/provider/:id" element={<ProviderProfilePage />} />
+        {/* Protected customer routes */}
+        <Route element={<ProtectedRoute roles={[env.ROLES.CUSTOMER]} />}>
           <Route path="/customer/book/:providerId" element={<BookServicePage />} />
           <Route path="/customer/bookings" element={<BookingsPage />} />
           <Route path="/customer/complaints" element={<CustomerComplaintsPage />} />
@@ -126,6 +134,12 @@ function App() {
           <Route path="/customer/notifications" element={<NotificationsPage />} />
           <Route path="/customer/profile" element={<ProfilePage />} />
           <Route path="/customer/settings" element={<SettingsPage />} />
+          <Route path="/customer/reviews" element={<NotFoundPage />} />
+          <Route path="/customer/messages" element={<NotFoundPage />} />
+          <Route path="/customer/addresses" element={<NotFoundPage />} />
+          <Route path="/customer/messages/*" element={<NotFoundPage />} />
+          <Route path="/customer/booking/*" element={<NotFoundPage />} />
+          <Route path="/customer/payment/*" element={<NotFoundPage />} />
         </Route>
 
         {/* Provider routes */}

@@ -13,6 +13,8 @@ import {
   Sun,
   X,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -175,12 +177,21 @@ export function Sidebar({ items, isOpen, onClose, desktopOnly = false }) {
               </div>
             </div>
           </div>
-        ) : (
+        ) : user ? (
           <div className="shrink-0 border-b border-border-light px-6 py-4 dark:border-border-dark">
             <div className="flex items-center gap-3">
               <Avatar src={user?.avatar} name={user?.name || 'User'} size="md" />
               <div className="min-w-0"><p className="truncate text-sm font-semibold text-ink-light dark:text-ink-dark">{user?.name || 'User'}</p><p className="text-xs text-gray-500 dark:text-gray-400">{getRoleLabel()}</p></div>
             </div>
+          </div>
+        ) : (
+          <div className="shrink-0 space-y-2 border-b border-border-light px-5 py-4 dark:border-border-dark">
+            <Link to="/auth/login" state={{ from: location }} onClick={onClose} className="block rounded-lg border border-emerald-700 px-3 py-2 text-center text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+              Login
+            </Link>
+            <Link to="/auth/register" state={{ from: location }} onClick={onClose} className="block rounded-lg bg-emerald-700 px-3 py-2 text-center text-sm font-semibold text-white">
+              Sign Up
+            </Link>
           </div>
         )}
 
