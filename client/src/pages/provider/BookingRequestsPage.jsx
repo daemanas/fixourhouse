@@ -289,33 +289,33 @@ export function BookingRequestsPage() {
   return (
     <div className="mx-auto w-full min-w-0 max-w-6xl space-y-5 overflow-x-hidden sm:space-y-6">
       <header className="flex min-w-0 items-center gap-3">
-        <Link
+        {/* <Link
           to="/provider/dashboard"
           aria-label="Back to provider dashboard"
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600 transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
         >
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-        </Link>
+        </Link> */}
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-xl font-bold leading-tight text-ink-light dark:text-ink-dark sm:text-2xl">Booking Requests</h1>
-          <p className="mt-1 truncate text-xs text-gray-500 dark:text-gray-400 sm:text-sm">New service requests from customers</p>
+          {/* <p className="mt-1 truncate text-xs text-gray-500 dark:text-gray-400 sm:text-sm">New service requests from customers</p> */}
         </div>
-        <button
+        {/* <button
           type="button"
           onClick={() => setSearchOpen((open) => !open)}
           aria-label={searchOpen ? 'Close booking search' : 'Search booking requests'}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-primary-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-primary-400"
         >
           <Search className="h-5 w-5" aria-hidden="true" />
-        </button>
-        <Link
+        </button> */}
+        {/* <Link
           to="/provider/notifications"
           aria-label="Notifications"
           className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-primary-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-primary-400"
         >
           <Bell className="h-5 w-5" aria-hidden="true" />
           <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-gray-900" aria-hidden="true" />
-        </Link>
+        </Link> */}
       </header>
 
       {searchOpen && (

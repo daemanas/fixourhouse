@@ -457,16 +457,16 @@ export function ServicesPage() {
   return (
     <div className="mx-auto w-full min-w-0 max-w-[1400px] space-y-6 overflow-x-hidden pb-8 sm:space-y-7">
       <header className="flex min-w-0 items-center gap-3">
-        <Link
+        {/* <Link
           to="/provider/dashboard"
           aria-label="Back to provider dashboard"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
         >
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-        </Link>
+        </Link> */}
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-2xl font-extrabold tracking-tight text-slate-950 dark:text-white sm:text-[28px]">My Services</h1>
-          <p className="truncate text-sm text-slate-500 dark:text-gray-400 sm:text-[15px]">Manage the services you provide to customers</p>
+          {/* <p className="truncate text-sm text-slate-500 dark:text-gray-400 sm:text-[15px]">Manage the services you provide to customers</p> */}
         </div>
         <Button onClick={() => setShowAddForm((prev) => !prev)} className="shrink-0 rounded-xl bg-emerald-600 px-3.5 py-2.5 shadow-sm transition hover:bg-emerald-700 hover:shadow-md sm:px-5">
           {showAddForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -508,7 +508,6 @@ export function ServicesPage() {
               <Icon className="h-4 w-4 sm:h-4.5 sm:w-4.5" aria-hidden="true" />
             </span>
 
-            {/* ডানপাশে Value এবং Label (কলাম আকারে) */}
             <div className="flex min-w-0 flex-col">
               <p className="text-base font-bold leading-none tracking-tight text-slate-950 dark:text-white sm:text-xl">{value}</p>
               <p className="mt-0.5 truncate text-[10px] font-medium text-slate-500 dark:text-gray-400 sm:text-xs">{label}</p>

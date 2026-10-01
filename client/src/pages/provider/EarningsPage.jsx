@@ -281,17 +281,24 @@ export function EarningsPage() {
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-6xl space-y-4 overflow-x-hidden pb-24 sm:space-y-5 sm:pb-8">
-      <header className="flex min-w-0 items-center gap-3 rounded-xl bg-white/90 px-1 py-1 dark:bg-background-dark/90 sm:sticky sm:top-16 sm:z-20 sm:backdrop-blur">
-        <button type="button" onClick={() => navigate('/provider/dashboard')} aria-label="Back to dashboard" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-700 transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
+      <header className="flex min-w-0 items-center gap-3 rounded-xl bg-white/90 p-2 border border-gray-100/50 shadow-xs dark:bg-gray-900/90 dark:border-gray-800/50 sm:sticky sm:top-16 sm:z-20 sm:backdrop-blur">
+        {/* <button
+          type="button"
+          onClick={() => navigate('/provider/dashboard')}
+          aria-label="Back to dashboard"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-700 transition hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+        >
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-        </button>
+        </button> */}
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg font-bold text-gray-900 dark:text-white sm:text-xl">Earnings &amp; Wallet</h1>
-          <p className="truncate text-xs text-gray-500 dark:text-gray-400 sm:text-sm">Track earnings, withdrawals and transactions</p>
+          <h1 className="truncate text-lg font-bold text-gray-900 dark:text-white sm:text-xl">
+            Earnings &amp; Wallet
+          </h1>
+          {/* <p className="truncate text-xs text-gray-500 dark:text-gray-400 sm:text-sm">Track earnings, withdrawals and transactions</p> */}
         </div>
-        <button type="button" title="Earnings are calculated from completed jobs and processed withdrawals" aria-label="Earnings information" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">
-          <CircleHelp className="h-5 w-5" aria-hidden="true" />
-        </button>
+        {/* <button type="button" title="Earnings are calculated from completed jobs and processed withdrawals" aria-label="Earnings information" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">
+    <CircleHelp className="h-5 w-5" aria-hidden="true" />
+  </button> */}
       </header>
 
       <section className="relative isolate overflow-hidden rounded-2xl border border-emerald-100 bg-emerald-50 p-4 dark:border-emerald-900/30 dark:bg-emerald-950/20 sm:p-6 lg:p-7" aria-label="Available wallet balance">

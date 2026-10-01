@@ -125,12 +125,12 @@ export function WithdrawalsPage() {
   return (
     <div className="mx-auto w-full min-w-0 max-w-6xl space-y-5 overflow-x-hidden pb-8 sm:space-y-6">
       <header className="flex items-center gap-3">
-        <Link to="/provider/earnings" aria-label="Back to Earnings & Wallet" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+        {/* <Link to="/provider/earnings" aria-label="Back to Earnings & Wallet" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200">
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-        </Link>
+        </Link> */}
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">Transaction History</h1>
-          <p className="truncate text-xs text-gray-500 dark:text-gray-400 sm:text-sm">Real earnings and payout activity</p>
+          {/* <p className="truncate text-xs text-gray-500 dark:text-gray-400 sm:text-sm">Real earnings and payout activity</p> */}
         </div>
         <Link to="/provider/earnings" aria-label="Bank and payout settings" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">
           <Wallet className="h-5 w-5" aria-hidden="true" />

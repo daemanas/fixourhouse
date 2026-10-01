@@ -357,9 +357,9 @@ export function JobsPage() {
       <header className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold leading-tight text-ink-light dark:text-ink-dark sm:text-3xl">My Jobs</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Manage your service jobs and track progress</p>
+          {/* <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Manage your service jobs and track progress</p> */}
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        {/* <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
             onClick={() => setSearchOpen((value) => !value)}
@@ -375,7 +375,7 @@ export function JobsPage() {
           >
             <Bell className="h-5 w-5" aria-hidden="true" />
           </Link>
-        </div>
+        </div> */}
       </header>
 
       {searchOpen && (
@@ -420,7 +420,7 @@ export function JobsPage() {
         </div>
       </div>
 
-      <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex w-max gap-2.5">
           <label className="relative flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-card-dark dark:text-gray-300">
             <CalendarDays className="h-4 w-4 text-gray-500" aria-hidden="true" />
@@ -469,7 +469,7 @@ export function JobsPage() {
             <ChevronDown className="h-4 w-4" aria-hidden="true" />
           </label>
         </div>
-      </div>
+      </div> */}
 
       {filteredJobs.length === 0 ? (
         <EmptyState
