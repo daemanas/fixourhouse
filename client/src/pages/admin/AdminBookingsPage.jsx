@@ -186,7 +186,7 @@ export function AdminBookingsPage() {
             onClick={() => row.provider?._id && navigate(`/admin/providers/${row.provider._id}`)}
             className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity"
           >
-            <Avatar src={user.avatar} name={provider.businessName || 'Provider'} size="sm" />
+            <Avatar src={provider} name={provider.businessName || 'Provider'} size="sm" />
             <span className="font-medium truncate max-w-[160px]">{safe(provider.businessName, 'Unknown')}</span>
           </button>
         );
@@ -454,7 +454,7 @@ function BookingDetailContent({ booking }) {
 
         <DetailSection title="Provider" icon={Building2}>
           <div className="flex items-center gap-3 mb-2">
-            <Avatar src={providerUser.avatar} name={provider.businessName || 'Provider'} size="md" />
+            <Avatar src={detailBooking.providerId} name={provider.businessName || 'Provider'} size="md" />
             <div>
               <p className="font-semibold">{safe(provider.businessName, 'Unknown')}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">

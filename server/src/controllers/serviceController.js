@@ -1,3 +1,4 @@
+import Booking from '../models/Booking.js';
 import Service from '../models/Service.js';
 import Provider from '../models/Provider.js';
 import Category from '../models/Category.js';
@@ -538,9 +539,12 @@ export const getServices = asyncHandler(async (req, res) => {
       // REVIEWS / RATING
       // ----------------------------------------------
 
+      const completedBookingIds = await Booking.distinct('_id', {
+        serviceId: plainSvc._id,
+        status: 'completed',
+      });
       const reviews = await Review.find({
-        providerId:
-          plainSvc.providerId?._id,
+        bookingId: { $in: completedBookingIds },
         isVisible: true,
       }).select('rating');
 
@@ -557,9 +561,7 @@ export const getServices = asyncHandler(async (req, res) => {
                 ) / reviewCount
               ).toFixed(1)
             )
-          : Number(
-              plainSvc.providerId?.rating || 0
-            );
+          : 0;
 
       // ----------------------------------------------
       // RETURN NORMALIZED SERVICE
@@ -634,7 +636,45 @@ export const getServices = asyncHandler(async (req, res) => {
   );
 });
 
-// @desc    Get single service details with providers, completed work, and reviews
+const loadServiceReviewPage = async (serviceId, page = 1, limit = 3) => {
+  const bookingIds = await Booking.distinct('_id', {
+    serviceId,
+    status: 'completed',
+  });
+  const filter = { bookingId: { $in: bookingIds }, isVisible: true };
+  const skip = (page - 1) * limit;
+
+  const [reviews, total, distribution] = await Promise.all([
+    Review.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('customerId', 'name avatar'),
+    Review.countDocuments(filter),
+    Review.aggregate([
+      { $match: filter },
+      { $group: { _id: '$rating', count: { $sum: 1 } } },
+    ]),
+  ]);
+
+  const ratingBreakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  let ratingTotal = 0;
+  distribution.forEach(({ _id, count }) => {
+    if (Object.prototype.hasOwnProperty.call(ratingBreakdown, _id)) {
+      ratingBreakdown[_id] = count;
+    }
+    ratingTotal += Number(_id) * count;
+  });
+
+  return {
+    reviews,
+    averageRating: total > 0 ? Number((ratingTotal / total).toFixed(1)) : 0,
+    ratingBreakdown,
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+  };
+};
+
+// @desc    Get single service details with matching providers and exact-service photos/reviews
 // @route   GET /api/v1/services/:id
 // @access  Public
 export const getServiceById = asyncHandler(async (req, res) => {
@@ -657,7 +697,7 @@ export const getServiceById = asyncHandler(async (req, res) => {
   const matchingNameRegex = new RegExp(`^${service.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
   const matchingServiceDocs = await Service.find({
     isActive: true,
-    $or: [{ name: matchingNameRegex }, { _id: service._id }],
+    name: matchingNameRegex,
   }).populate({
     path: 'providerId',
     select: 'businessName rating reviewCount location avatar isVerified verificationStatus experience pricing description',
@@ -665,16 +705,39 @@ export const getServiceById = asyncHandler(async (req, res) => {
   });
 
   const providerMap = new Map();
+  const refId = (value) => String(value?._id || value || '');
+  const selectedTypeId = refId(service.serviceTypeId);
+  const selectedCategoryId = refId(service.serviceCategoryId || service.categoryId);
   matchingServiceDocs.forEach((doc) => {
+    const offerTypeId = refId(doc.serviceTypeId);
+    const offerCategoryId = refId(doc.serviceCategoryId || doc.categoryId);
+    if (selectedTypeId && offerTypeId && selectedTypeId !== offerTypeId) return;
+    if (selectedCategoryId && offerCategoryId && selectedCategoryId !== offerCategoryId) return;
     if (
       doc.providerId &&
       ['approved', 'verified'].includes(doc.providerId.verificationStatus || 'approved')
     ) {
-      providerMap.set(String(doc.providerId._id), {
+      const providerId = String(doc.providerId._id);
+      const existingOffer = providerMap.get(providerId);
+      if (!existingOffer || String(doc._id) === String(service._id)) providerMap.set(providerId, {
         provider: doc.providerId,
-        serviceId: doc._id,
-        price: doc.price,
-        duration: doc.duration,
+        serviceId: service._id,
+        providerServiceId: doc._id,
+        providerService: {
+          _id: doc._id,
+          name: doc.name,
+          description: doc.description,
+          startingPrice: doc.startingPrice,
+          price: doc.price,
+          durationMinutes: doc.durationMinutes,
+          duration: doc.duration,
+          discountPercentage: doc.discountPercentage,
+          primaryImage: doc.primaryImage,
+          image: doc.image,
+          images: doc.images,
+        },
+        price: doc.price ?? doc.startingPrice,
+        duration: doc.duration || doc.durationMinutes,
         description: doc.description,
       });
     }
@@ -683,12 +746,7 @@ export const getServiceById = asyncHandler(async (req, res) => {
   const providersOfferingService = Array.from(providerMap.values());
   const providerIds = Array.from(providerMap.keys());
 
-  const completedPhotos = await CompletedServicePhoto.find({
-    $or: [
-      { serviceId: service._id },
-      { providerId: { $in: providerIds } },
-    ],
-  })
+  const completedPhotos = await CompletedServicePhoto.find({ serviceId: service._id })
     .populate({
       path: 'providerId',
       select: 'businessName avatar rating location',
@@ -696,26 +754,9 @@ export const getServiceById = asyncHandler(async (req, res) => {
     })
     .sort({ createdAt: -1 });
 
-  const reviews = await Review.find({
-    providerId: { $in: providerIds },
-    isVisible: true,
-  })
-    .populate('customerId', 'name avatar')
-    .sort({ createdAt: -1 });
-
-  const totalReviews = reviews.length;
-  const averageRating =
-    totalReviews > 0
-      ? Number((reviews.reduce((acc, r) => acc + r.rating, 0) / totalReviews).toFixed(1))
-      : 0;
-
-  const ratingBreakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
-  reviews.forEach((r) => {
-    const roundRating = Math.round(r.rating);
-    if (ratingBreakdown[roundRating] !== undefined) {
-      ratingBreakdown[roundRating] += 1;
-    }
-  });
+  const reviewPage = Math.max(parseInt(req.query.reviewPage, 10) || 1, 1);
+  const reviewLimit = Math.min(Math.max(parseInt(req.query.reviewLimit, 10) || 3, 1), 20);
+  const reviewData = await loadServiceReviewPage(service._id, reviewPage, reviewLimit);
 
   res.status(200).json(
     new ApiResponse(
@@ -723,16 +764,39 @@ export const getServiceById = asyncHandler(async (req, res) => {
       {
         service: {
           ...service.toObject(),
-          rating: averageRating,
-          reviewCount: totalReviews,
+          rating: reviewData.averageRating,
+          reviewCount: reviewData.pagination.total,
           availableProvidersCount: providersOfferingService.length,
         },
         providers: providersOfferingService,
         completedPhotos,
-        reviews,
-        ratingBreakdown,
+        reviews: reviewData.reviews,
+        averageRating: reviewData.averageRating,
+        ratingBreakdown: reviewData.ratingBreakdown,
+        reviewPagination: reviewData.pagination,
       },
       'Service details fetched successfully'
     )
+  );
+});
+
+// @desc    Get a paginated page of reviews for one exact service
+// @route   GET /api/v1/services/:id/reviews
+// @access  Public
+export const getServiceReviews = asyncHandler(async (req, res) => {
+  const service = await Service.findById(req.params.id).select('_id');
+  const embeddedServiceProvider = service
+    ? null
+    : await Provider.findOne({ 'services._id': req.params.id }).select('_id');
+  if (!service && !embeddedServiceProvider) {
+    throw new ApiError(404, 'Service not found');
+  }
+
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 3, 1), 20);
+  const reviewData = await loadServiceReviewPage(service._id, page, limit);
+
+  res.status(200).json(
+    new ApiResponse(200, reviewData, 'Service reviews fetched successfully')
   );
 });

@@ -1,5 +1,7 @@
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Provider from '../models/Provider.js';
+import Service from '../models/Service.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
@@ -101,5 +103,80 @@ export const toggleWishlist = asyncHandler(async (req, res) => {
 
   res.status(200).json(
     new ApiResponse(200, { wishlisted: true }, 'Added to wishlist')
+  );
+});
+
+// @desc    Get the authenticated user's exact favorited services
+// @route   GET /api/v1/users/me/service-wishlist
+// @access  Private
+export const getServiceWishlist = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id).populate({
+    path: 'serviceWishlist',
+    select: 'name description startingPrice price discountPercentage primaryImage image images rating reviewCount providerId serviceTypeId serviceCategoryId categoryId isActive',
+    populate: [
+      {
+        path: 'providerId',
+        select: 'businessName category avatar location rating reviewCount experience userId',
+        populate: { path: 'userId', select: 'name avatar' },
+      },
+      { path: 'serviceTypeId', select: 'name slug' },
+      { path: 'serviceCategoryId', select: 'name slug' },
+      { path: 'categoryId', select: 'name slug' },
+    ],
+  });
+
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  const services = (user.serviceWishlist || []).filter(Boolean).map((service) => {
+    const serviceData = service.toObject();
+    const provider = serviceData.providerId;
+    if (provider && typeof provider === 'object') {
+      serviceData.providerId = {
+        ...provider,
+        name: provider.userId?.name || provider.businessName || 'Provider',
+        profileImage: provider.userId?.avatar || provider.avatar || '',
+      };
+    }
+    return serviceData;
+  });
+
+  res.status(200).json(
+    new ApiResponse(200, { wishlist: services }, 'Service wishlist fetched successfully')
+  );
+});
+
+// @desc    Toggle one exact service in the authenticated user's wishlist
+// @route   POST /api/v1/users/me/service-wishlist/:serviceId
+// @access  Private
+export const toggleServiceWishlist = asyncHandler(async (req, res) => {
+  const { serviceId } = req.params;
+  if (!mongoose.isValidObjectId(serviceId)) {
+    throw new ApiError(400, 'Invalid service ID');
+  }
+
+  const service = await Service.findById(serviceId).select('_id');
+  if (!service) {
+    throw new ApiError(404, 'Service not found');
+  }
+
+  const user = await User.findById(req.user._id);
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  const favoriteId = String(service._id);
+  const isWishlisted = (user.serviceWishlist || []).some((id) => String(id) === favoriteId);
+  if (isWishlisted) {
+    await User.updateOne({ _id: user._id }, { $pull: { serviceWishlist: service._id } });
+    return res.status(200).json(
+      new ApiResponse(200, { wishlisted: false }, 'Service removed from wishlist')
+    );
+  }
+
+  await User.updateOne({ _id: user._id }, { $addToSet: { serviceWishlist: service._id } });
+  res.status(200).json(
+    new ApiResponse(200, { wishlisted: true }, 'Service added to wishlist')
   );
 });

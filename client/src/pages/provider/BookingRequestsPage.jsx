@@ -51,7 +51,18 @@ const requestTabs = [
 
 const getService = (booking) => booking.serviceSnapshot || booking.serviceId || {};
 const getAddress = (booking) => booking.bookingAddress || booking.address || {};
-const getCustomer = (booking) => booking.customerSnapshot || booking.customerId || {};
+const getCustomer = (booking) => {
+  const customer = booking.customerId && typeof booking.customerId === 'object'
+    ? booking.customerId
+    : {};
+  const snapshot = booking.customerSnapshot || {};
+  return {
+    ...snapshot,
+    ...customer,
+    name: customer.name || snapshot.name,
+    phone: customer.phone || snapshot.phone,
+  };
+};
 
 const getServiceImage = (booking) => {
   const snapshot = booking.serviceSnapshot || {};

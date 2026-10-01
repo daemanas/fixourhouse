@@ -19,12 +19,40 @@ const addTimeline = (booking, status, note = '') => {
   booking.timeline.push({ status, timestamp: new Date(), note });
 };
 
+const referenceId = (value) => String(value?._id || value || '');
+const normalizedServiceName = (service) =>
+  String(service?.name || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+
+const servicesMatch = (selectedService, providerService) => {
+  if (normalizedServiceName(selectedService) !== normalizedServiceName(providerService)) return false;
+
+  const selectedTypeId = referenceId(selectedService.serviceTypeId);
+  const providerTypeId = referenceId(providerService.serviceTypeId);
+  if (selectedTypeId && providerTypeId && selectedTypeId !== providerTypeId) return false;
+
+  const selectedCategoryId = referenceId(selectedService.serviceCategoryId || selectedService.categoryId);
+  const providerCategoryId = referenceId(providerService.serviceCategoryId || providerService.categoryId);
+  return !selectedCategoryId || !providerCategoryId || selectedCategoryId === providerCategoryId;
+};
+
 // @desc    Create a new booking
 // @route   POST /api/v1/bookings
 // @access  Private (Customer)
 export const createBooking = asyncHandler(async (req, res) => {
-  const { providerId, serviceId, scheduledDate, scheduledTime, address, notes, paymentMethod } =
-    req.body;
+  const {
+    providerId,
+    serviceId,
+    providerServiceId,
+    scheduledDate,
+    scheduledTime,
+    address,
+    notes,
+    paymentMethod,
+  } = req.body;
+
+  if (!mongoose.isValidObjectId(providerId) || !mongoose.isValidObjectId(serviceId)) {
+    throw new ApiError(400, 'Invalid provider or service ID');
+  }
 
   const provider = await Provider.findById(providerId);
   if (!provider) {
@@ -35,29 +63,61 @@ export const createBooking = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Provider is not verified yet');
   }
 
-  // Services are created by providers as embedded subdocuments on the Provider
-  // profile, so resolve the booked service from the provider's services array
-  // first. Also fall back to the standalone Service collection for legacy data.
-  const providerService = (provider.services || []).find(
-    (s) => String(s._id) === String(serviceId)
-  );
+  const selectedServiceDocument = await Service.findById(serviceId);
+  const selectedEmbeddedService = (provider.services || []).id(serviceId);
+  const selectedService = selectedServiceDocument || selectedEmbeddedService;
+  if (!selectedService || selectedService.isActive === false) {
+    throw new ApiError(404, 'Selected service not found or inactive');
+  }
 
-  let service = providerService || null;
-  let serviceName = providerService?.name || '';
-  let servicePrice = providerService?.price || 0;
-
-  if (!service && mongoose.isValidObjectId(serviceId)) {
-    const serviceDoc = await Service.findById(serviceId);
-    if (serviceDoc && serviceDoc.isActive) {
-      service = serviceDoc;
-      serviceName = serviceDoc.name;
-      servicePrice = serviceDoc.price;
+  let providerService = null;
+  if (providerServiceId) {
+    if (!mongoose.isValidObjectId(providerServiceId)) {
+      throw new ApiError(400, 'Invalid provider service ID');
     }
+
+    const providerServiceDocument = await Service.findById(providerServiceId);
+    if (providerServiceDocument) {
+      if (String(providerServiceDocument.providerId) !== String(provider._id)) {
+        throw new ApiError(400, 'Selected service does not belong to this provider');
+      }
+      if (!providerServiceDocument.isActive) {
+        throw new ApiError(400, 'The provider service is no longer available');
+      }
+      providerService = providerServiceDocument;
+    } else {
+      const embeddedProviderService = (provider.services || []).id(providerServiceId);
+      if (!embeddedProviderService || embeddedProviderService.isActive === false) {
+        throw new ApiError(400, 'Selected service does not belong to this provider');
+      }
+      providerService = embeddedProviderService;
+    }
+  } else if (selectedServiceDocument && String(selectedServiceDocument.providerId) === String(provider._id)) {
+    if (!selectedServiceDocument.isActive) {
+      throw new ApiError(400, 'The provider service is no longer available');
+    }
+    providerService = selectedServiceDocument;
+  } else {
+    providerService = selectedEmbeddedService;
   }
 
-  if (!service) {
-    throw new ApiError(404, 'Service not found or inactive');
+  if (!providerService || providerService.isActive === false) {
+    throw new ApiError(404, 'Provider service not found or inactive');
   }
+  if (!servicesMatch(selectedService, providerService)) {
+    throw new ApiError(400, 'The selected provider does not offer this service');
+  }
+
+  const servicePrice = Number(providerService.price ?? providerService.startingPrice);
+  if (!Number.isFinite(servicePrice) || servicePrice < 0) {
+    throw new ApiError(400, 'The provider service has an invalid price');
+  }
+  const discountPercentage = Number(providerService.discountPercentage || selectedService.discountPercentage || 0);
+  if (!Number.isFinite(discountPercentage) || discountPercentage < 0 || discountPercentage > 100) {
+    throw new ApiError(400, 'The provider service has an invalid discount');
+  }
+  const finalPrice = Math.round(servicePrice * (1 - discountPercentage / 100) * 100) / 100;
+  const serviceName = selectedService.name;
 
   // Check for booking conflicts - prevent double booking the same time slot
   const conflict = await Booking.findOne({
@@ -76,11 +136,17 @@ export const createBooking = asyncHandler(async (req, res) => {
     customerId: req.user._id,
     providerId,
     serviceId,
+    providerServiceId: providerService._id,
     serviceSnapshot: {
       serviceId,
       serviceName,
-      description: service.description,
+      description: selectedService.description || providerService.description,
       price: servicePrice,
+      discountPercentage,
+      providerServiceId: providerService._id,
+      primaryImage: providerService.primaryImage || '',
+      image: providerService.image || '',
+      images: providerService.images || [],
     },
     customerSnapshot: {
       name: req.user.name,
@@ -91,7 +157,8 @@ export const createBooking = asyncHandler(async (req, res) => {
       country: address.country || 'India',
     },
     serviceName,
-    amount: servicePrice,
+    discountPercentage,
+    amount: finalPrice,
     status: 'pending',
     scheduledDate,
     scheduledTime,
@@ -107,7 +174,7 @@ export const createBooking = asyncHandler(async (req, res) => {
     bookingId: booking._id,
     customerId: req.user._id,
     providerId,
-    amount: servicePrice,
+    amount: finalPrice,
     method: paymentMethod || 'cash',
     status: 'pending',
   });
@@ -117,7 +184,7 @@ export const createBooking = asyncHandler(async (req, res) => {
     userId: provider.userId,
     type: 'booking',
     title: 'New booking request',
-    message: `You have a new booking request for ${service.name}`,
+    message: `You have a new booking request for ${serviceName}`,
     data: { bookingId: booking._id },
   });
 
@@ -162,6 +229,10 @@ export const getMyBookings = asyncHandler(async (req, res) => {
       .populate(
         'serviceId',
         'name price startingPrice primaryImage image images durationMinutes duration discountPercentage serviceTypeId serviceCategoryId categoryId'
+      )
+      .populate(
+        'providerServiceId',
+        'name description price startingPrice primaryImage image images durationMinutes duration'
       ),
     Booking.countDocuments(filter),
   ]);
@@ -189,7 +260,8 @@ export const getBookingById = asyncHandler(async (req, res) => {
       select: 'businessName location',
       populate: { path: 'userId', select: 'name phone avatar' },
     })
-    .populate('serviceId', 'name price');
+    .populate('serviceId', 'name price')
+    .populate('providerServiceId', 'name description price startingPrice primaryImage image images');
 
   if (!booking) {
     throw new ApiError(404, 'Booking not found');

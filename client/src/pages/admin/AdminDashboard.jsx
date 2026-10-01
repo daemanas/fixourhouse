@@ -178,7 +178,7 @@ export function AdminDashboard() {
                 {topProviders.map((provider) => (
                   <div key={provider._id} className="flex items-center gap-3">
                     <Avatar
-                      src={provider.userId?.avatar}
+                      src={provider}
                       name={provider.businessName || 'P'}
                       size="md"
                     />

@@ -22,13 +22,24 @@ const bookingSchema = new mongoose.Schema(
       ref: 'Service',
       required: true,
     },
+    providerServiceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Service',
+      default: null,
+    },
     serviceName: String,
+    discountPercentage: { type: Number, min: 0, max: 100, default: 0 },
     // Snapshots for historical integrity
     serviceSnapshot: {
       serviceId: mongoose.Schema.Types.ObjectId,
       serviceName: String,
       description: String,
       price: Number,
+      discountPercentage: { type: Number, min: 0, max: 100, default: 0 },
+      providerServiceId: mongoose.Schema.Types.ObjectId,
+      primaryImage: String,
+      image: String,
+      images: [String],
     },
     customerSnapshot: {
       name: String,

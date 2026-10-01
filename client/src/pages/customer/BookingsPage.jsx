@@ -67,9 +67,9 @@ const getServiceName = (booking) =>
 const getProviderName = (booking) => booking.providerId?.businessName || booking.providerId?.userId?.name || 'Provider';
 
 const getServiceImage = (booking) => {
-  const service = booking.serviceId || booking.serviceSnapshot || {};
+  const service = booking.serviceSnapshot || booking.serviceId || {};
   const image = service.primaryImage || service.image || service.images?.[0]
-    || booking.serviceSnapshot?.primaryImage || booking.serviceSnapshot?.image || booking.serviceSnapshot?.images?.[0];
+    || booking.serviceId?.primaryImage || booking.serviceId?.image || booking.serviceId?.images?.[0];
   return image ? resolveAssetUrl(image) : '';
 };
 
@@ -534,7 +534,10 @@ export function BookingsPage() {
                         <div className="flex min-w-0 items-start justify-between gap-2">
                           <div className="min-w-0">
                             <h2 className="line-clamp-2 text-base font-bold text-ink-light dark:text-ink-dark sm:text-lg">{serviceName}</h2>
-                            <p className="mt-0.5 truncate text-sm text-gray-600 dark:text-gray-300">{providerName}</p>
+                            <div className="mt-1 flex min-w-0 items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                              <Avatar src={booking.providerId} name={providerName} size="xs" />
+                              <p className="truncate">{providerName}</p>
+                            </div>
                           </div>
                           <div className="shrink-0 sm:hidden">{getStatusBadge(booking.status)}</div>
                         </div>
@@ -652,7 +655,7 @@ export function BookingsPage() {
           <div className="space-y-6">
             <div className="flex items-center gap-4">
               <Avatar
-                src={selectedBooking.providerId?.userId?.avatar}
+                src={selectedBooking.providerId}
                 name={selectedBooking.providerId?.businessName}
                 size="lg"
                 rounded="rounded-xl"

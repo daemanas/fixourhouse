@@ -125,7 +125,7 @@ export function AdminProvidersPage() {
       key: 'name', label: 'Provider',
       render: (row) => (
         <div className="flex items-center gap-3 min-w-[200px] cursor-pointer hover:opacity-80" onClick={() => navigate(`/admin/providers/${row._id}`)}>
-          <Avatar src={row.userId?.avatar} name={row.businessName || 'P'} size="sm" />
+          <Avatar src={row} name={row.businessName || 'P'} size="sm" />
           <div className="min-w-0">
             <p className="font-medium text-ink-light dark:text-ink-dark truncate">{row.businessName}</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">{row.userId?.name ? `${row.userId.name} • ` : ''}{row.userId?.email || '—'}</p>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { resolveAssetUrl } from '../../utils/assetUrl';
+import getProfileImage from '../../utils/profileImage';
 
 const SIZES = {
   xs: 'h-8 w-8 text-xs',
@@ -23,13 +24,14 @@ export function Avatar({
   alt = '',
 }) {
   const [failed, setFailed] = useState(false);
-  const hasImage = Boolean(src) && !failed;
+  const imageSrc = getProfileImage(src);
+  const hasImage = Boolean(imageSrc) && !failed;
 
   // If the src changes (e.g. a new avatar was uploaded), the previous failure
   // state must not stick — retry the new URL so the replacement image renders.
   useEffect(() => {
     setFailed(false);
-  }, [src]);
+  }, [imageSrc]);
 
   const initials = (name || '?')
     .split(/\s+/)
@@ -42,7 +44,7 @@ export function Avatar({
   if (hasImage) {
     return (
       <img
-        src={resolveAssetUrl(src)}
+        src={resolveAssetUrl(imageSrc)}
         alt={alt || name || 'avatar'}
         onError={() => setFailed(true)}
         className={`${SIZES[size]} ${rounded} object-cover shrink-0 ${className}`}

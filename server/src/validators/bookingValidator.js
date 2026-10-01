@@ -16,6 +16,7 @@ export const createBookingValidator = Joi.object({
   body: Joi.object({
     providerId: Joi.string().required(),
     serviceId: Joi.string().required(),
+    providerServiceId: Joi.string().hex().length(24).optional(),
     scheduledDate: Joi.date().custom(dateNotBeforeToday).required(),
     scheduledTime: Joi.string().pattern(/^([01]\d|2[0-3]):([0-5]\d)$/).required(),
     address: Joi.object({

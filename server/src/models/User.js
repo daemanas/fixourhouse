@@ -71,6 +71,12 @@ const userSchema = new mongoose.Schema(
         ref: 'Provider',
       },
     ],
+    serviceWishlist: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Service',
+      },
+    ],
     otp: {
       code: String,
       expiresAt: Date,

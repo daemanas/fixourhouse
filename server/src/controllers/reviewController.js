@@ -1,5 +1,6 @@
 import Booking from '../models/Booking.js';
 import Provider from '../models/Provider.js';
+import Service from '../models/Service.js';
 import Review from '../models/Review.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
@@ -29,6 +30,9 @@ export const createReview = asyncHandler(async (req, res) => {
   if (booking.status !== 'completed') {
     throw new ApiError(400, 'You can only review completed bookings');
   }
+  if (!booking.providerId || !booking.serviceId) {
+    throw new ApiError(400, 'This booking does not have a selected provider and service');
+  }
 
   const existingReview = await Review.findOne({ bookingId });
   if (existingReview) {
@@ -39,6 +43,7 @@ export const createReview = asyncHandler(async (req, res) => {
     bookingId,
     customerId: req.user._id,
     providerId: booking.providerId,
+    serviceId: booking.serviceId,
     rating: numericRating,
     comment,
   });
@@ -49,17 +54,41 @@ export const createReview = asyncHandler(async (req, res) => {
   booking.reviewedAt = new Date();
   await booking.save();
 
-  // Update provider aggregate rating
-  const stats = await Review.aggregate([
-    { $match: { providerId: booking.providerId, isVisible: true } },
-    { $group: { _id: null, avgRating: { $avg: '$rating' }, count: { $sum: 1 } } },
+  const [providerBookingIds, serviceBookingIds] = await Promise.all([
+    Booking.distinct('_id', { providerId: booking.providerId, status: 'completed' }),
+    Booking.distinct('_id', { serviceId: booking.serviceId, status: 'completed' }),
+  ]);
+  const [providerStats, serviceStats] = await Promise.all([
+    Review.aggregate([
+      { $match: { bookingId: { $in: providerBookingIds }, isVisible: true } },
+      { $group: { _id: null, avgRating: { $avg: '$rating' }, count: { $sum: 1 } } },
+    ]),
+    Review.aggregate([
+      { $match: { bookingId: { $in: serviceBookingIds }, isVisible: true } },
+      { $group: { _id: null, avgRating: { $avg: '$rating' }, count: { $sum: 1 } } },
+    ]),
   ]);
 
-  const provider = await Provider.findById(booking.providerId);
-  if (provider && stats.length > 0) {
-    provider.rating = Math.round(stats[0].avgRating * 10) / 10;
-    provider.reviewCount = stats[0].count;
+  const [provider, service] = await Promise.all([
+    Provider.findById(booking.providerId),
+    Service.findById(booking.serviceId),
+  ]);
+  if (provider) {
+    provider.rating = providerStats.length ? Number(providerStats[0].avgRating.toFixed(1)) : 0;
+    provider.reviewCount = providerStats[0]?.count || 0;
+    if (!service) {
+      const embeddedService = provider.services.id(booking.serviceId);
+      if (embeddedService) {
+        embeddedService.rating = serviceStats.length ? Number(serviceStats[0].avgRating.toFixed(1)) : 0;
+        embeddedService.reviewCount = serviceStats[0]?.count || 0;
+      }
+    }
     await provider.save();
+  }
+  if (service) {
+    service.rating = serviceStats.length ? Number(serviceStats[0].avgRating.toFixed(1)) : 0;
+    service.reviewCount = serviceStats[0]?.count || 0;
+    await service.save();
   }
 
   res.status(201).json(
@@ -75,7 +104,15 @@ export const getProviderReviews = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
 
-  const filter = { providerId: req.params.providerId, isVisible: true };
+  const completedBookingIds = await Booking.distinct('_id', {
+    providerId: req.params.providerId,
+    status: 'completed',
+  });
+  const filter = {
+    providerId: req.params.providerId,
+    bookingId: { $in: completedBookingIds },
+    isVisible: true,
+  };
 
   const [reviews, total] = await Promise.all([
     Review.find(filter)

@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Heart,
   ImageOff,
-  Loader2,
   MapPin,
   RefreshCw,
   Search,
@@ -15,7 +14,7 @@ import {
 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
-import { getWishlist, toggleWishlist } from '../../services/userService';
+import { getServiceWishlist, toggleServiceWishlist } from '../../services/userService';
 import { getServices } from '../../services/serviceService';
 import { getServiceTypes } from '../../services/serviceTypeService';
 import resolveAssetUrl from '../../utils/assetUrl';
@@ -61,7 +60,6 @@ function ServiceCard({ service, compact = false, isFavorite = false, onToggleFav
   const reviewCount = Number(service.reviewCount ?? 0);
   const providerCount = Number(service.providerCount ?? service.availableProvidersCount ?? 0);
   const provider = service.providerId && typeof service.providerId === 'object' ? service.providerId : null;
-  const providerId = provider?._id || service.providerId;
   const city = provider?.location?.city || provider?.location?.district;
   const providerLabel = providerCount > 0
     ? `${providerCount.toLocaleString('en-IN')} ${providerCount === 1 ? 'provider' : 'providers'}`
@@ -115,11 +113,11 @@ function ServiceCard({ service, compact = false, isFavorite = false, onToggleFav
         </div>
       </Link>
 
-      {onToggleFavorite && providerId && (
+      {onToggleFavorite && service._id && (
         <button
           type="button"
-          onClick={(event) => onToggleFavorite(event, providerId)}
-          aria-label={isFavorite ? 'Remove provider from wishlist' : 'Add provider to wishlist'}
+          onClick={(event) => onToggleFavorite(event, service._id)}
+          aria-label={isFavorite ? 'Remove service from wishlist' : 'Add service to wishlist'}
           aria-pressed={isFavorite}
           className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-gray-500 shadow-sm transition hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:bg-gray-900/90 dark:text-gray-300"
         >
@@ -164,11 +162,7 @@ function ServiceSkeletonRow() {
   );
 }
 
-function MarketplaceHero({ service }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const imagePath = service?.primaryImage || service?.image || service?.images?.[0] || '';
-  const imageUrl = imagePath ? resolveAssetUrl(imagePath) : '';
-
+function MarketplaceHero() {
   return (
     <section className="relative isolate grid min-h-[208px] grid-cols-[1.1fr_.9fr] overflow-hidden rounded-2xl bg-[#eaf4f2] dark:bg-gray-800 sm:min-h-[236px] lg:min-h-[260px]" aria-label="LocalFix service marketplace">
       <div className="relative z-10 flex flex-col items-start justify-center px-5 py-6 sm:px-8 lg:px-10">
@@ -190,19 +184,9 @@ function MarketplaceHero({ service }) {
       </div>
 
       <div className="relative min-h-full overflow-hidden">
-        {imageUrl && !imageFailed ? (
-          <img
-            src={imageUrl}
-            alt=""
-            fetchPriority="high"
-            onError={() => setImageFailed(true)}
-            className="absolute inset-0 h-full w-full object-cover object-center"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-primary-100/70 text-primary-700 dark:bg-gray-700 dark:text-primary-300">
-            <Wrench className="h-14 w-14 sm:h-20 sm:w-20" strokeWidth={1.25} aria-hidden="true" />
-          </div>
-        )}
+        <div className="absolute inset-0 flex items-center justify-center bg-primary-100/70 text-primary-700 dark:bg-gray-700 dark:text-primary-300">
+          <Wrench className="h-14 w-14 sm:h-20 sm:w-20" strokeWidth={1.25} aria-hidden="true" />
+        </div>
         <div className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-[#eaf4f2] to-transparent dark:from-gray-800" />
       </div>
     </section>
@@ -269,12 +253,12 @@ function ServiceSection({ group, onViewAll, favorites, onToggleFavorite }) {
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {group.services.map((service) => (
-              <ServiceCard
-                key={service._id}
-                service={service}
-                isFavorite={favorites.has(String(service.providerId?._id || service.providerId))}
-                onToggleFavorite={onToggleFavorite}
-              />
+            <ServiceCard
+              key={service._id}
+              service={service}
+              isFavorite={favorites.has(String(service._id))}
+              onToggleFavorite={onToggleFavorite}
+            />
           ))}
         </div>
         {group.services.length > 2 && (
@@ -299,16 +283,16 @@ export function CustomerServicesPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewAllGroup, setViewAllGroup] = useState(null);
-  const [favoriteProviderIds, setFavoriteProviderIds] = useState(() => new Set());
+  const [favoriteServiceIds, setFavoriteServiceIds] = useState(() => new Set());
 
   useEffect(() => {
     let isCurrent = true;
 
-    getWishlist()
+    getServiceWishlist()
       .then((response) => {
         const wishlist = response.data?.data?.wishlist || [];
         if (isCurrent) {
-          setFavoriteProviderIds(new Set(wishlist.map((provider) => String(provider._id))));
+          setFavoriteServiceIds(new Set(wishlist.map((service) => String(service._id))));
         }
       })
       .catch(() => {});
@@ -392,13 +376,13 @@ export function CustomerServicesPage() {
     setViewAllGroup(fullGroup || group);
   };
 
-  const handleToggleFavorite = async (event, providerId) => {
+  const handleToggleFavorite = async (event, serviceId) => {
     event.preventDefault();
     event.stopPropagation();
-    const favoriteId = String(providerId);
-    const wasFavorite = favoriteProviderIds.has(favoriteId);
+    const favoriteId = String(serviceId);
+    const wasFavorite = favoriteServiceIds.has(favoriteId);
 
-    setFavoriteProviderIds((current) => {
+    setFavoriteServiceIds((current) => {
       const next = new Set(current);
       if (wasFavorite) next.delete(favoriteId);
       else next.add(favoriteId);
@@ -406,9 +390,9 @@ export function CustomerServicesPage() {
     });
 
     try {
-      await toggleWishlist(favoriteId);
+      await toggleServiceWishlist(favoriteId);
     } catch (favoriteError) {
-      setFavoriteProviderIds((current) => {
+      setFavoriteServiceIds((current) => {
         const next = new Set(current);
         if (wasFavorite) next.add(favoriteId);
         else next.delete(favoriteId);
@@ -438,7 +422,7 @@ export function CustomerServicesPage() {
       ? popularServices.filter((service) => service.name.toLocaleLowerCase().includes(normalizedSearch))
       : popularServices;
   }, [popularServices, searchTerm]);
-  const heroService = allServices.find((service) => service.primaryImage || service.image || service.images?.[0]) || allServices[0];
+
   const popularGroup = filteredPopularServices.length > 0
     ? { _id: 'popular-services', name: 'Popular Services', services: filteredPopularServices }
     : null;
@@ -510,14 +494,14 @@ export function CustomerServicesPage() {
         </div>
       ) : (
         <div className="min-w-0 space-y-7 sm:space-y-9">
-          <MarketplaceHero service={heroService} />
+          <MarketplaceHero />
           <ServiceTypeRail groups={serviceGroups} />
           <div id="available-services" className="space-y-7 sm:space-y-9">
             {popularGroup && (
               <ServiceSection
                 group={popularGroup}
                 onViewAll={showAllServices}
-                favorites={favoriteProviderIds}
+                favorites={favoriteServiceIds}
                 onToggleFavorite={handleToggleFavorite}
               />
             )}
@@ -526,7 +510,7 @@ export function CustomerServicesPage() {
                 key={group._id}
                 group={group}
                 onViewAll={showAllServices}
-                favorites={favoriteProviderIds}
+                favorites={favoriteServiceIds}
                 onToggleFavorite={handleToggleFavorite}
               />
             ))}
@@ -544,13 +528,12 @@ export function CustomerServicesPage() {
         {viewAllGroup && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {viewAllGroup.services.map((service) => {
-              const providerId = service.providerId?._id || service.providerId;
               return (
                 <ServiceCard
                   key={service._id}
                   service={service}
                   compact
-                  isFavorite={favoriteProviderIds.has(String(providerId))}
+                  isFavorite={favoriteServiceIds.has(String(service._id))}
                   onToggleFavorite={handleToggleFavorite}
                 />
               );

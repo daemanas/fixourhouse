@@ -484,7 +484,7 @@ export function JobsPage() {
             const customerName = customer?.name || 'Customer';
             const customerAvatar = customer?.avatar;
             const customerPhone = customer?.phone;
-            const service = job.serviceId || job.serviceSnapshot || {};
+            const service = job.serviceSnapshot || job.serviceId || {};
             const locationStr = [job.address?.line1, job.address?.city, job.address?.state].filter(Boolean).join(', ');
             const scheduledDate = job.scheduledDate
               ? new Date(job.scheduledDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })

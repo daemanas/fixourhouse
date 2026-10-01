@@ -13,6 +13,11 @@ const reviewSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    serviceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Service',
+      required: true,
+    },
     providerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Provider',
@@ -46,6 +51,7 @@ const reviewSchema = new mongoose.Schema(
 
 // Indexes
 reviewSchema.index({ providerId: 1 });
+reviewSchema.index({ serviceId: 1 });
 reviewSchema.index({ customerId: 1 });
 reviewSchema.index({ rating: 1 });
 reviewSchema.index({ isVisible: 1 });

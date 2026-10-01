@@ -1,21 +1,17 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Wrench,
   Star,
   Clock,
-  MapPin,
-  CheckCircle2,
   ShieldCheck,
   AlertCircle,
-  Loader2,
   ChevronRight,
-  User,
   Image as ImageIcon,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
-import { getServiceById } from '../../services/serviceService';
+import { getServiceById, getServiceReviews } from '../../services/serviceService';
 import { createBooking } from '../../services/bookingService';
 import resolveAssetUrl from '../../utils/assetUrl';
 import Card from '../../components/ui/Card';
@@ -26,7 +22,6 @@ import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import Textarea from '../../components/ui/Textarea';
 import Select from '../../components/ui/Select';
-
 
 const TIME_SLOTS = [
   '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM',
@@ -67,13 +62,15 @@ export function ServiceDetailPage() {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [activePhoto, setActivePhoto] = useState(null);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const [loadingMoreReviews, setLoadingMoreReviews] = useState(false);
 
   useEffect(() => {
     const fetchDetail = async () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await getServiceById(id);
+        const res = await getServiceById(id, { reviewPage: 1, reviewLimit: 3 });
         setData(res.data.data);
       } catch (err) {
         setError(err.response?.data?.message || 'Failed to load service details.');
@@ -84,13 +81,100 @@ export function ServiceDetailPage() {
     if (id) fetchDetail();
   }, [id]);
 
-  const handleOpenBooking = (providerTier) => {
+  const handleLoadMoreReviews = async () => {
+    if (!data?.reviewPagination || data.reviewPagination.page >= data.reviewPagination.pages) return;
+    setLoadingMoreReviews(true);
+    try {
+      const response = await getServiceReviews(id, {
+        page: data.reviewPagination.page + 1,
+        limit: 3,
+      });
+      const nextPage = response.data?.data;
+      if (nextPage) {
+        setData((current) => ({
+          ...current,
+          reviews: [...(current.reviews || []), ...(nextPage.reviews || [])],
+          reviewPagination: nextPage.pagination,
+        }));
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not load more reviews.');
+    } finally {
+      setLoadingMoreReviews(false);
+    }
+  };
+
+  const getCalculatedPrice = (rawPrice, discountPct) => {
+    const basePrice = Number(rawPrice ?? 0);
+    const discount = Number(discountPct ?? 0);
+    if (discount > 0) {
+      const discounted = basePrice * (1 - discount / 100);
+      return Math.round(discounted * 100) / 100;
+    }
+    return basePrice;
+  };
+
+  const buildProviderSelection = (offer) => {
+    const providerService = offer.providerService || {};
+    const basePrice = Number(offer.price ?? providerService.price ?? data.service.startingPrice ?? data.service.price ?? 0);
+    const offerDiscount = Number(providerService.discountPercentage || offer.discountPercentage || data.service.discountPercentage || 0);
+    const provider = offer.provider || {};
+
+    return {
+      provider,
+      selectedServiceId: String(offer.serviceId || data.service._id),
+      selectedProviderId: String(provider._id || provider),
+      selectedProviderServiceId: String(offer.providerServiceId || providerService._id || ''),
+      providerService,
+      basePrice,
+      discountPercentage: offerDiscount,
+      price: getCalculatedPrice(basePrice, offerDiscount),
+      duration: providerService.durationMinutes || offer.duration || data.service.durationMinutes,
+    };
+  };
+
+  const handleOpenBooking = (providerTier = null) => {
     if (!user) {
       toast.error('Please sign in as a customer to book services');
       navigate('/auth/login');
       return;
     }
-    setSelectedProvider(providerTier);
+
+    const providersOfferingService = Array.isArray(data?.providersOfferingService)
+      ? data.providersOfferingService
+      : Array.isArray(data?.providers)
+        ? data.providers
+        : [];
+
+    const discountPercentage = Number(data?.service?.discountPercentage ?? 0);
+    let targetProvider = providerTier;
+
+    if (!targetProvider) {
+      if (providersOfferingService.length > 0) {
+        targetProvider = buildProviderSelection(providersOfferingService[0]);
+      } else if (data?.service?.providerId) {
+        const p = data.service.providerId;
+        const rawP = Number(data.service.startingPrice ?? data.service.price ?? 0);
+        targetProvider = {
+          provider: typeof p === 'object' ? p : { _id: p },
+          selectedServiceId: String(data.service._id),
+          selectedProviderId: String(typeof p === 'object' ? p._id : p),
+          selectedProviderServiceId: '',
+          providerService: data.service,
+          basePrice: rawP,
+          discountPercentage,
+          price: getCalculatedPrice(rawP, discountPercentage),
+          duration: data.service.durationMinutes,
+        };
+      }
+    }
+
+    if (!targetProvider || (!targetProvider.selectedProviderId && !targetProvider.provider?._id)) {
+      toast.error('No local provider is currently available for this service.');
+      return;
+    }
+
+    setSelectedProvider(targetProvider);
     setIsBookingOpen(true);
   };
 
@@ -109,11 +193,18 @@ export function ServiceDetailPage() {
       return;
     }
 
+    const providerId = selectedProvider?.selectedProviderId || selectedProvider?.provider?._id;
+    if (!providerId) {
+      toast.error('No provider selected or available.');
+      return;
+    }
+
     setBookingLoading(true);
     try {
       await createBooking({
-        providerId: selectedProvider.provider._id,
-        serviceId: selectedProvider.serviceId || data.service._id,
+        providerId,
+        serviceId: selectedProvider?.selectedServiceId || selectedProvider?.serviceId || data.service._id,
+        providerServiceId: selectedProvider?.selectedProviderServiceId || selectedProvider?.providerServiceId || undefined,
         scheduledDate: new Date(selectedDate).toISOString(),
         scheduledTime: toApiTime(selectedTime),
         address,
@@ -132,9 +223,21 @@ export function ServiceDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-        <Loader2 className="h-10 w-10 animate-spin text-primary-500 mb-4" />
-        <p className="text-sm font-medium">Loading service details...</p>
+      <div className="mx-auto w-full max-w-7xl space-y-7 px-3 py-5 sm:px-4 lg:px-6" aria-label="Loading service details">
+        <div className="h-4 w-52 animate-pulse rounded bg-gray-200 dark:bg-gray-800" />
+        <div className="grid gap-5 lg:grid-cols-2">
+          <div className="aspect-[4/3] animate-pulse rounded-2xl bg-gray-200 dark:bg-gray-800" />
+          <div className="space-y-4 py-2">
+            <div className="h-5 w-36 animate-pulse rounded bg-gray-200 dark:bg-gray-800" />
+            <div className="h-10 w-4/5 animate-pulse rounded bg-gray-200 dark:bg-gray-800" />
+            <div className="h-4 w-1/2 animate-pulse rounded bg-gray-100 dark:bg-gray-800" />
+            <div className="h-24 animate-pulse rounded-xl bg-gray-100 dark:bg-gray-800" />
+            <div className="h-12 w-48 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-800" />
+          </div>
+        </div>
+        <div className="h-28 animate-pulse rounded-2xl bg-gray-100 dark:bg-gray-800" />
+        <div className="grid grid-cols-2 gap-3"><div className="aspect-[4/3] animate-pulse rounded-xl bg-gray-200 dark:bg-gray-800" /><div className="aspect-[4/3] animate-pulse rounded-xl bg-gray-200 dark:bg-gray-800" /></div>
+        <div className="h-36 animate-pulse rounded-2xl bg-gray-100 dark:bg-gray-800" />
       </div>
     );
   }
@@ -161,7 +264,17 @@ export function ServiceDetailPage() {
     ratingBreakdown = {},
   } = data;
 
-  const completedPhotoItems = completedPhotos
+  const providersOfferingService = Array.isArray(data.providersOfferingService)
+    ? data.providersOfferingService
+    : Array.isArray(data.providers)
+      ? data.providers
+      : [];
+
+  const exactServicePhotos = completedPhotos.filter((photoRecord) =>
+    String(photoRecord.serviceId?._id || photoRecord.serviceId) === String(service._id)
+  );
+
+  const completedPhotoItems = exactServicePhotos
     .flatMap((photoRecord) => {
       const imagePaths = Array.isArray(photoRecord.images) && photoRecord.images.length > 0
         ? photoRecord.images
@@ -170,37 +283,23 @@ export function ServiceDetailPage() {
       return imagePaths.map((imagePath, index) => ({
         ...photoRecord,
         _id: `${photoRecord._id || 'completed-photo'}-${index}`,
+        title: photoRecord.caption || 'Completed work photo',
+        description: photoRecord.caption || '',
         url: resolveAssetUrl(imagePath),
       }));
     })
     .filter((photo) => photo.url);
 
-  // Backend currently returns providers in `data.providers`.
-  // Keep support for the older `providersOfferingService` key as well.
-  const providersOfferingService = Array.isArray(data.providersOfferingService)
-    ? data.providersOfferingService
-    : Array.isArray(data.providers)
-      ? data.providers
-      : [];
-
-  // Normalize rating so the page works whether the API sends it as
-  // data.averageRating, service.averageRating, service.rating, or only reviews.
-  const reviewRatingAverage = reviews.length > 0
-    ? reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length
-    : 0;
-
   const averageRating = Number(
     data.averageRating ??
     service.averageRating ??
     service.rating ??
-    reviewRatingAverage ??
     0
   );
 
   const safeAverageRating = Number.isFinite(averageRating) ? averageRating : 0;
+  const totalReviews = Number(data.reviewPagination?.total ?? service.reviewCount ?? reviews.length);
 
-  // Normalize price because older/newer API versions may use `startingPrice`
-  // or `price`. This prevents the details page from rendering only `₹`.
   const startingPrice = Number(
     service.startingPrice ??
     service.price ??
@@ -210,11 +309,11 @@ export function ServiceDetailPage() {
   const discountPercentage = Number(service.discountPercentage ?? 0);
   const hasDiscount = discountPercentage > 0;
 
-  const finalStartingPrice = hasDiscount
-    ? startingPrice * (1 - discountPercentage / 100)
-    : startingPrice;
+  const finalStartingPrice = getCalculatedPrice(startingPrice, discountPercentage);
+  const finalPrice = finalStartingPrice;
 
-  const finalPrice = Math.round(finalStartingPrice * 100) / 100;
+  const serviceImage = service.primaryImage || service.image || service.images?.[0] || '';
+  const serviceImageUrl = serviceImage ? resolveAssetUrl(serviceImage) : '';
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 sm:space-y-8 pb-8 sm:pb-12 px-3 sm:px-4 lg:px-6">
@@ -231,12 +330,12 @@ export function ServiceDetailPage() {
       </nav>
 
       {/* Hero Header Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-7 lg:gap-8 items-start">
+      <div className="grid grid-cols-1 items-start gap-5 sm:gap-7 lg:grid-cols-2 lg:gap-8">
         <div className="lg:col-span-1">
           <div className="relative w-full max-w-xl mx-auto lg:max-w-none rounded-2xl sm:rounded-3xl overflow-hidden bg-gray-100 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 aspect-[4/3] sm:aspect-[16/11] lg:aspect-square shadow-sm">
-            {service.primaryImage || service.images?.[0] ? (
+            {serviceImageUrl ? (
               <img
-                src={service.primaryImage || service.images[0]}
+                src={serviceImageUrl}
                 alt={service.name}
                 className="w-full h-full object-cover"
               />
@@ -254,7 +353,7 @@ export function ServiceDetailPage() {
           </div>
         </div>
 
-        <div className="lg:col-span-2 min-w-0 space-y-4 sm:space-y-5">
+        <div className="min-w-0 space-y-4 sm:space-y-5">
           <div className="flex flex-wrap items-center gap-2">
             {service.serviceCategoryId?.name && (
               <Badge variant="primary">{service.serviceCategoryId.name}</Badge>
@@ -272,7 +371,7 @@ export function ServiceDetailPage() {
             <div className="flex items-center gap-1.5">
               <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
               <span className="font-bold text-ink-light dark:text-ink-dark">{safeAverageRating.toFixed(1)}</span>
-              <span>({reviews.length} reviews)</span>
+              <span>({totalReviews} reviews)</span>
             </div>
 
             {service.durationMinutes && (
@@ -281,11 +380,6 @@ export function ServiceDetailPage() {
                 <span>Estimated ~{service.durationMinutes} mins</span>
               </div>
             )}
-
-            <div className="flex items-center gap-1.5">
-              <User className="h-4 w-4 text-primary-500" />
-              <span>{providersOfferingService.length} Local Providers Available</span>
-            </div>
           </div>
 
           <p className="text-gray-600 dark:text-gray-300 text-sm sm:text-[15px] leading-6 pt-1 sm:pt-2 break-words">
@@ -294,15 +388,11 @@ export function ServiceDetailPage() {
 
           <div className="p-4 sm:p-5 rounded-xl sm:rounded-2xl bg-gray-50 dark:bg-card-dark border border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-4">
             <div>
-              <span className="text-xs text-gray-400 block">Catalog Starting Price</span>
-              <div className="flex items-baseline gap-2 mt-0.5">
-                <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">
-                  ₹{finalPrice}
-                </span>
-                {hasDiscount && (
-                  <span className="text-sm text-gray-400 line-through">₹{startingPrice}</span>
-                )}
-              </div>
+              <span className="text-xs text-gray-400 block">Catalog Price</span>
+              <span className="mt-0.5 block text-sm font-semibold text-ink-light dark:text-ink-dark">₹{startingPrice.toLocaleString('en-IN')}</span>
+              {hasDiscount && <span className="mt-1 block text-xs text-emerald-700 dark:text-emerald-400">{discountPercentage}% discount</span>}
+              <span className="mt-1 block text-xs text-gray-400">Final catalog price</span>
+              <span className="block text-2xl font-bold text-primary-600 dark:text-primary-400">₹{finalPrice.toLocaleString('en-IN')}</span>
             </div>
             <div className="text-left sm:text-right text-xs text-gray-500 dark:text-gray-400">
               <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
@@ -311,114 +401,49 @@ export function ServiceDetailPage() {
               <p className="mt-0.5">Transparent pricing & upfront quotes</p>
             </div>
           </div>
+
+          <Button
+            type="button"
+            size="lg"
+            className="min-h-11 w-full sm:w-auto"
+            onClick={() => handleOpenBooking()}
+          >
+            Book Service
+          </Button>
         </div>
       </div>
 
-      {/* Available Local Providers Offering This Service */}
-      <div className="space-y-4 sm:space-y-5 pt-5 sm:pt-7 border-t border-gray-100 dark:border-gray-800">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-ink-light dark:text-ink-dark">
-            Available Local Providers ({providersOfferingService.length})
-          </h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Compare prices, ratings, and choose your preferred local specialist for this service.
-          </p>
+      {/* About Section */}
+      <section className="space-y-3 border-t border-gray-100 pt-6 dark:border-gray-800" aria-labelledby="about-service-heading">
+        <h2 id="about-service-heading" className="text-xl font-bold text-ink-light dark:text-ink-dark">About This Service</h2>
+        <div className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-gray-800 dark:bg-card-dark sm:p-6">
+          {service.description ? (
+            <>
+              <p className={`whitespace-pre-line text-sm leading-6 text-gray-600 dark:text-gray-300 sm:text-[15px] ${descriptionExpanded ? '' : 'line-clamp-4'}`}>
+                {service.description}
+              </p>
+              {service.description.length > 260 && (
+                <button
+                  type="button"
+                  onClick={() => setDescriptionExpanded((current) => !current)}
+                  className="mt-3 min-h-9 text-sm font-semibold text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-primary-300"
+                >
+                  {descriptionExpanded ? 'Read Less' : 'Read More'}
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">No service description has been provided yet.</p>
+          )}
         </div>
+      </section>
 
-        {providersOfferingService.length === 0 ? (
-          <Card className="p-8 text-center text-gray-500">
-            No active providers currently offer this service in your area.
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
-            {providersOfferingService.map(({ provider, serviceId, price, duration, description: customDesc }) => {
-              if (!provider) return null;
-              const pUser = provider.userId || {};
-              const pName = provider.businessName || pUser.name || 'Local Fix Pro';
-              const pAvatar = provider.avatar || pUser.avatar;
-              const pRating = provider.rating || 0;
-              const pReviews = provider.reviewCount || 0;
-              const pPrice = Number(
-                price ??
-                provider.pricing?.startingPrice ??
-                startingPrice ??
-                0
-              );
-
-              return (
-                <Card key={provider._id} className="group flex min-w-0 flex-col justify-between rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-card-dark p-4 sm:p-5 shadow-sm hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200">
-                  <div className="space-y-3">
-                    <div className="flex min-w-0 items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <Avatar src={pAvatar} name={pName} size="md" />
-                        <div>
-                          <h3 className="font-bold text-ink-light dark:text-ink-dark text-sm sm:text-[15px] line-clamp-1 break-words">
-                            {pName}
-                          </h3>
-                          <div className="flex items-center gap-1 text-xs mt-0.5">
-                            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                            <span className="font-semibold text-ink-light dark:text-ink-dark">{pRating.toFixed(1)}</span>
-                            <span className="text-gray-400">({pReviews})</span>
-                          </div>
-                        </div>
-                      </div>
-                      {provider.isVerified && (
-                        <Badge variant="success" className="text-[10px] py-0.5 px-1.5">
-                          Verified
-                        </Badge>
-                      )}
-                    </div>
-
-                    <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                      {provider.location?.city && (
-                        <div className="flex items-center gap-1">
-                          <MapPin className="h-3.5 w-3.5 text-gray-400" />
-                          <span>{provider.location.city}, {provider.location.state || ''}</span>
-                        </div>
-                      )}
-                      {provider.experience && (
-                        <div className="flex items-center gap-1">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                          <span>{provider.experience} years experience</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {customDesc && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 italic line-clamp-2 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-lg">
-                        "{customDesc}"
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div>
-                      <span className="text-[10px] text-gray-400 block">Offer Price</span>
-                      <span className="text-base font-bold text-primary-600 dark:text-primary-400">
-                        ₹{pPrice}
-                      </span>
-                    </div>
-                    <Button
-                      size="sm"
-                      className="w-full sm:w-auto min-h-10"
-                      onClick={() => handleOpenBooking({ provider, serviceId, price: pPrice })}
-                    >
-                      Book Service
-                    </Button>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Completed Work Photo Gallery (Proof of Completed Jobs) */}
+      {/* Completed Work Photo Gallery */}
       <div className="space-y-4 pt-6 border-t border-gray-100 dark:border-gray-800">
         <div>
           <h2 className="text-xl font-bold text-ink-light dark:text-ink-dark flex items-center gap-2">
             <ImageIcon className="h-5 w-5 text-primary-500" />
-            Completed Job Photo Gallery ({completedPhotoItems.length})
+            Completed Job Photos ({completedPhotoItems.length})
           </h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             Real photos uploaded by verified local providers after completing work for this service.
@@ -427,27 +452,22 @@ export function ServiceDetailPage() {
 
         {completedPhotoItems.length === 0 ? (
           <div className="p-8 text-center text-xs text-gray-400 bg-gray-50 dark:bg-card-dark rounded-xl border border-gray-100 dark:border-gray-800">
-            No completed job photos uploaded yet for this service catalog.
+            <span className="block font-medium">No completed work photos yet.</span>
+            <span className="mt-1 block">Verified providers will add photos after completing this service.</span>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-3">
-            {completedPhotoItems.slice(0, 4).map((photo, index) => {
-              const remainingPhotos = completedPhotoItems.length - 4;
-              const isLastVisiblePhoto = index === 3 && remainingPhotos > 0;
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+            {completedPhotoItems.slice(0, 2).map((photo, index) => {
+              const remainingPhotos = completedPhotoItems.length - 2;
+              const isLastVisiblePhoto = index === 1 && remainingPhotos > 0;
 
               return (
-                <div
+                <button
+                  type="button"
                   key={photo._id}
-                  onClick={() => {
-                    if (isLastVisiblePhoto) {
-                      // Open the first photo in the lightbox.
-                      // All photos remain available through the gallery modal flow.
-                      setActivePhoto(photo);
-                    } else {
-                      setActivePhoto(photo);
-                    }
-                  }}
-                  className="group relative aspect-square rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 cursor-pointer border border-gray-100 dark:border-gray-800"
+                  onClick={() => { setActivePhoto(photo); setActivePhotoIndex(index); }}
+                  className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-gray-100 bg-gray-100 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:border-gray-800 dark:bg-gray-800"
+                  aria-label={isLastVisiblePhoto ? `View all ${completedPhotoItems.length} completed service photos` : `View completed service photo ${index + 1}`}
                 >
                   <img
                     src={photo.url}
@@ -455,85 +475,120 @@ export function ServiceDetailPage() {
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
 
-                  {/* Normal hover information */}
                   {!isLastVisiblePhoto && (
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-2.5 flex flex-col justify-end">
                       <p className="text-white text-xs font-semibold truncate">
                         {photo.title || 'Completed Work'}
                       </p>
-
                       <p className="text-gray-300 text-[10px] truncate">
                         {photo.providerId?.businessName || 'Provider Photo'}
                       </p>
                     </div>
                   )}
 
-                  {/* More Photos Overlay */}
                   {isLastVisiblePhoto && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/55 group-hover:bg-black/65 transition-colors">
-                      <span className="text-white text-sm sm:text-base font-bold px-4 py-2 rounded-lg bg-black/35 backdrop-blur-sm">
+                      <span className="text-white text-sm font-bold sm:text-base">
                         +{remainingPhotos} More
                       </span>
                     </div>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>
         )}
       </div>
 
-      {/* Customer Reviews Section */}
-      <div className="space-y-6 pt-6 border-t border-gray-100 dark:border-gray-800">
-        <h2 className="text-xl sm:text-2xl font-bold text-ink-light dark:text-ink-dark">
-          Customer Reviews & Ratings ({reviews.length})
-        </h2>
+      <section className="space-y-4 border-t border-gray-100 pt-6 dark:border-gray-800" aria-labelledby="available-providers-heading">
+        <div>
+          <h2 id="available-providers-heading" className="text-xl font-bold text-ink-light dark:text-ink-dark">Available Local Providers</h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Compare verified providers offering this service.</p>
+        </div>
+        {providersOfferingService.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700">No local providers are available for this service yet.</p>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2">
+            {providersOfferingService.map((offer) => {
+              const selection = buildProviderSelection(offer);
+              const provider = offer.provider || {};
+              const providerName = provider.businessName || provider.userId?.name || 'Local Specialist';
+              const providerLocation = provider.location || {};
+              const location = [providerLocation.city, providerLocation.district, providerLocation.state].filter(Boolean).join(', ');
 
-        {reviews.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-6 bg-gray-50 dark:bg-card-dark p-4 sm:p-6 rounded-2xl border border-gray-100 dark:border-gray-800">
-            <div className="flex flex-col items-center justify-center text-center border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-800 pr-0 md:pr-6 pb-4 md:pb-0">
-              <span className="text-4xl font-extrabold text-ink-light dark:text-ink-dark">{safeAverageRating.toFixed(1)}</span>
-              <div className="flex items-center gap-1 my-1">
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <Star
-                    key={s}
-                    className={`h-4 w-4 ${s <= Math.round(averageRating) ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`}
-                  />
-                ))}
-              </div>
-              <span className="text-xs text-gray-500">Based on {reviews.length} ratings</span>
-            </div>
-
-            <div className="md:col-span-2 space-y-2">
-              {[5, 4, 3, 2, 1].map((stars) => {
-                const count = ratingBreakdown[stars] || 0;
-                const percentage = reviews.length > 0 ? (count / reviews.length) * 100 : 0;
-                return (
-                  <div key={stars} className="flex items-center gap-3 text-xs">
-                    <span className="w-12 shrink-0 text-gray-600 dark:text-gray-300 font-medium">{stars} stars</span>
-                    <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                      <div className="h-full bg-amber-400 rounded-full" style={{ width: `${percentage}%` }} />
+              return (
+                <Card key={selection.selectedProviderServiceId || selection.selectedProviderId} className="flex min-w-0 items-center gap-3 p-4">
+                  <Avatar src={provider} name={providerName} size="lg" />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate font-semibold text-ink-light dark:text-ink-dark">{providerName}</h3>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                      <span className="inline-flex items-center gap-1"><Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />{Number(provider.rating || 0).toFixed(1)} ({Number(provider.reviewCount || 0)} reviews)</span>
+                      {location && <span>{location}</span>}
+                      {Number(provider.experience) > 0 && <span>{provider.experience} yrs experience</span>}
                     </div>
-                    <span className="w-8 text-right text-gray-400">{count}</span>
+                    <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                      <span className="font-bold text-primary-700 dark:text-primary-300">₹{selection.price.toLocaleString('en-IN')}</span>
+                      {selection.discountPercentage > 0 && <span className="text-xs text-gray-400 line-through">₹{selection.basePrice.toLocaleString('en-IN')}</span>}
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Provider offer</span>
+                    </div>
                   </div>
-                );
-              })}
-            </div>
+                  <Button type="button" size="sm" onClick={() => handleOpenBooking(selection)}>Book</Button>
+                </Card>
+              );
+            })}
           </div>
         )}
+      </section>
+
+      {/* Customer Reviews Section */}
+      <section className="space-y-6 border-t border-gray-100 pt-6 dark:border-gray-800" aria-labelledby="service-reviews-heading">
+        <h2 className="text-xl sm:text-2xl font-bold text-ink-light dark:text-ink-dark">
+          Customer Reviews &amp; Ratings ({totalReviews})
+        </h2>
+
+        <div className="grid grid-cols-1 gap-5 rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-card-dark sm:p-6 md:grid-cols-3">
+          <div className="flex flex-col items-center justify-center text-center border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-800 pr-0 md:pr-6 pb-4 md:pb-0">
+            <span className="text-4xl font-extrabold text-ink-light dark:text-ink-dark">{safeAverageRating.toFixed(1)}</span>
+            <div className="flex items-center gap-1 my-1">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <Star
+                  key={s}
+                  className={`h-4 w-4 ${s <= Math.round(averageRating) ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`}
+                />
+              ))}
+            </div>
+            <span className="text-xs text-gray-500">Based on {totalReviews} {totalReviews === 1 ? 'review' : 'reviews'}</span>
+          </div>
+
+          <div className="md:col-span-2 space-y-2">
+            {[5, 4, 3, 2, 1].map((stars) => {
+              const count = ratingBreakdown[stars] || 0;
+              const percentage = totalReviews > 0 ? (count / totalReviews) * 100 : 0;
+              return (
+                <div key={stars} className="flex items-center gap-3 text-xs">
+                  <span className="w-12 shrink-0 text-gray-600 dark:text-gray-300 font-medium">{stars} stars</span>
+                  <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div className="h-full bg-amber-400 rounded-full" style={{ width: `${percentage}%` }} />
+                  </div>
+                  <span className="w-8 text-right text-gray-400">{count}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
         {reviews.length === 0 ? (
-          <p className="text-sm text-gray-500">No customer reviews yet for providers offering this service.</p>
+          <p className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500 dark:border-gray-700">No customer reviews for this service yet.</p>
         ) : (
           <div className="space-y-4">
-            {reviews.slice(0, 6).map((rev) => (
+            {reviews.map((rev) => (
               <Card key={rev._id} className="p-4 sm:p-5 rounded-2xl border border-gray-100 dark:border-gray-800 space-y-3 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
                     <Avatar src={rev.customerId?.avatar} name={rev.customerId?.name} size="sm" />
                     <div>
                       <h4 className="text-xs font-bold text-ink-light dark:text-ink-dark">{rev.customerId?.name || 'Customer'}</h4>
-                      <p className="text-[10px] text-gray-400">{new Date(rev.createdAt).toLocaleDateString()}</p>
+                      <p className="text-[10px] text-gray-400">{new Date(rev.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-0.5">
@@ -542,12 +597,20 @@ export function ServiceDetailPage() {
                     ))}
                   </div>
                 </div>
-                <p className="text-xs text-gray-600 dark:text-gray-300">{rev.comment}</p>
+                <p className="text-xs text-gray-600 dark:text-gray-300">{rev.comment || 'No written comment.'}</p>
               </Card>
             ))}
           </div>
         )}
-      </div>
+
+        {data.reviewPagination?.page < data.reviewPagination?.pages && (
+          <div className="flex justify-center">
+            <Button type="button" variant="outline" onClick={handleLoadMoreReviews} loading={loadingMoreReviews} disabled={loadingMoreReviews}>
+              {reviews.length <= 3 ? 'View All Reviews' : 'Load More Reviews'}
+            </Button>
+          </div>
+        )}
+      </section>
 
       {/* Booking Modal */}
       {selectedProvider && (
@@ -559,14 +622,55 @@ export function ServiceDetailPage() {
           size="lg"
         >
           <form onSubmit={handleCreateBooking} className="space-y-4 pt-2">
+            {/* If multiple providers offer this service, allow choosing between them */}
+            {providersOfferingService.length > 1 && (
+              <Select
+                label="Select Provider"
+                options={providersOfferingService.map((offer) => {
+                  const selection = buildProviderSelection(offer);
+                  const p = offer.provider || {};
+                  const pName = p.businessName || p.userId?.name || 'Local Specialist';
+                  return {
+                    value: String(p._id),
+                    label: `${pName} - ₹${selection.price.toLocaleString('en-IN')}`,
+                  };
+                })}
+                value={String(selectedProvider?.selectedProviderId || selectedProvider?.provider?._id || '')}
+                onChange={(e) => {
+                  const selectedId = e.target.value;
+                  const offer = providersOfferingService.find(
+                    (o) => String(o.provider?._id) === selectedId
+                  );
+                  if (offer) {
+                    setSelectedProvider(buildProviderSelection(offer));
+                  }
+                }}
+              />
+            )}
+
             <div className="p-3 sm:p-4 bg-gray-50 dark:bg-gray-800 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
               <div>
-                <span className="text-gray-400 block">Service Base Fee</span>
-                <span className="font-bold text-sm text-primary-600 dark:text-primary-400">₹{Number(selectedProvider.price ?? 0)}</span>
+                <div className="mb-2 flex items-center gap-2">
+                  <Avatar
+                    src={selectedProvider.provider}
+                    name={selectedProvider.provider?.businessName || selectedProvider.provider?.userId?.name || 'Provider'}
+                    size="xs"
+                  />
+                  <span className="font-medium text-ink-light dark:text-ink-dark">
+                    {selectedProvider.provider?.businessName || selectedProvider.provider?.userId?.name || 'Local Specialist'}
+                  </span>
+                </div>
+                <span className="text-gray-400 block">Selected Service</span>
+                <span className="block font-semibold text-ink-light dark:text-ink-dark">{selectedProvider.providerService?.name || service.name}</span>
+                <span className="mt-1 block text-gray-400">Provider Offer Price</span>
+                <span className="font-semibold text-sm text-ink-light dark:text-ink-dark">₹{Number(selectedProvider.basePrice ?? selectedProvider.price ?? 0).toLocaleString('en-IN')}</span>
+                {Number(selectedProvider.discountPercentage) > 0 && <span className="ml-2 text-xs text-gray-400">{selectedProvider.discountPercentage}% off</span>}
+                <span className="mt-1 block text-gray-400">Final Payable Price</span>
+                <span className="font-bold text-sm text-primary-600 dark:text-primary-400">₹{Number(selectedProvider.price ?? 0).toLocaleString('en-IN')}</span>
               </div>
               <div className="text-right">
                 <span className="text-gray-400 block">Est. Duration</span>
-                <span className="font-semibold text-ink-light dark:text-ink-dark">~{service.durationMinutes || 60} mins</span>
+                <span className="font-semibold text-ink-light dark:text-ink-dark">~{selectedProvider.duration || service.durationMinutes || 60} mins</span>
               </div>
             </div>
 
@@ -662,8 +766,6 @@ export function ServiceDetailPage() {
           size="xl"
         >
           <div className="space-y-4">
-
-            {/* Main Image */}
             <div className="relative max-h-[60vh] rounded-xl overflow-hidden bg-black flex items-center justify-center">
               <img
                 src={completedPhotoItems[activePhotoIndex]?.url || activePhoto.url}
@@ -675,7 +777,6 @@ export function ServiceDetailPage() {
                 className="max-h-[65vh] sm:max-h-[70vh] max-w-full w-auto object-contain"
               />
 
-              {/* Previous */}
               {completedPhotoItems.length > 1 && (
                 <button
                   type="button"
@@ -693,7 +794,6 @@ export function ServiceDetailPage() {
                 </button>
               )}
 
-              {/* Next */}
               {completedPhotoItems.length > 1 && (
                 <button
                   type="button"
@@ -712,21 +812,18 @@ export function ServiceDetailPage() {
               )}
             </div>
 
-            {/* Photo counter */}
             {completedPhotoItems.length > 1 && (
               <div className="text-center text-xs text-gray-400">
                 {activePhotoIndex + 1} / {completedPhotoItems.length}
               </div>
             )}
 
-            {/* Description */}
             {completedPhotoItems[activePhotoIndex]?.description && (
               <p className="text-sm text-gray-600 dark:text-gray-300">
                 {completedPhotoItems[activePhotoIndex].description}
               </p>
             )}
 
-            {/* Provider + Date */}
             <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-gray-100 dark:border-gray-800">
               <span>
                 Completed by:{' '}

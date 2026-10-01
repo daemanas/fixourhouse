@@ -1,4 +1,5 @@
 import DashboardLayout from './DashboardLayout';
+import { useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Search,
@@ -24,12 +25,15 @@ const items = [
 ];
 
 export function CustomerLayout() {
+  const location = useLocation();
+
   return (
     <DashboardLayout
       items={items}
       title="My LocalFix"
       subtitle="Find and manage trusted local services"
       showSearch
+      customerDashboardHeader={location.pathname === '/customer/dashboard'}
     />
   );
 }

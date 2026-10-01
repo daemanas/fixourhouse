@@ -974,15 +974,20 @@ export const getProviderStats = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Provider profile not found');
   }
 
+  const completedReviewBookingIds = await Booking.distinct('_id', {
+    providerId: provider._id,
+    status: 'completed',
+  });
+
   const [totalBookings, pendingBookings, workingBookings, completedBookings, totalReviews, avgRating] =
     await Promise.all([
       Booking.countDocuments({ providerId: provider._id }),
       Booking.countDocuments({ providerId: provider._id, status: 'pending' }),
       Booking.countDocuments({ providerId: provider._id, status: 'working' }),
       Booking.countDocuments({ providerId: provider._id, status: 'completed' }),
-      Review.countDocuments({ providerId: provider._id }),
+      Review.countDocuments({ bookingId: { $in: completedReviewBookingIds }, isVisible: true }),
       Review.aggregate([
-        { $match: { providerId: provider._id } },
+        { $match: { bookingId: { $in: completedReviewBookingIds }, isVisible: true } },
         { $group: { _id: null, avg: { $avg: '$rating' } } },
       ]),
     ]);

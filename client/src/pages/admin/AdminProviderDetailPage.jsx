@@ -218,7 +218,7 @@ export function AdminProviderDetailPage() {
       <Card className="p-6">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-start gap-4">
-            <Avatar src={user.avatar} name={provider.businessName} size="xl" />
+            <Avatar src={provider} name={provider.businessName} size="xl" />
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold text-ink-light dark:text-ink-dark">

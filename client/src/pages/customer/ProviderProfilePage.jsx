@@ -157,7 +157,7 @@ export function ProviderProfilePage() {
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
             <div className="flex flex-col sm:flex-row items-start gap-6">
               <Avatar
-                src={provider.userId?.avatar}
+                src={provider}
                 name={provider.businessName}
                 size="xl"
                 rounded="rounded-2xl"

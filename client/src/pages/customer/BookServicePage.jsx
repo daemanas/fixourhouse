@@ -146,10 +146,10 @@ export function BookServicePage() {
   }
 
   const services = provider.services || [];
-  const serviceCharge = selectedService?.price || 0;
-  const platformFee = serviceCharge ? Math.round(serviceCharge * 0.05) : 0;
-  const gst = serviceCharge ? Math.round((serviceCharge + platformFee) * 0.18) : 0;
-  const total = serviceCharge + platformFee + gst;
+  const serviceBasePrice = Number(selectedService?.price ?? selectedService?.startingPrice ?? 0);
+  const discountPercentage = Number(selectedService?.discountPercentage ?? 0);
+  const serviceCharge = Math.round(serviceBasePrice * (1 - discountPercentage / 100) * 100) / 100;
+  const total = serviceCharge;
   const providerRating = provider.rating || 0;
   const reviewCount = provider.reviewCount || 0;
   const locationStr = [provider.location?.area, provider.location?.city, provider.location?.state]
@@ -213,7 +213,10 @@ export function BookServicePage() {
                           )}
                         </div>
                       </div>
-                      <p className="font-semibold text-ink-light dark:text-ink-dark">₹{service.price}</p>
+                      <div className="text-right">
+                        <p className="font-semibold text-ink-light dark:text-ink-dark">₹{Math.round(Number(service.price ?? service.startingPrice ?? 0) * (1 - Number(service.discountPercentage || 0) / 100) * 100) / 100}</p>
+                        {Number(service.discountPercentage) > 0 && <p className="text-xs text-gray-400 line-through">₹{Number(service.price ?? service.startingPrice ?? 0)}</p>}
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -395,7 +398,7 @@ export function BookServicePage() {
 
               <div className="flex items-center gap-3 pb-4 border-b border-gray-200 dark:border-gray-700">
                 <Avatar
-                  src={provider.userId?.avatar}
+                  src={provider}
                   name={provider.businessName}
                   size="md"
                   rounded="rounded-xl"
@@ -443,16 +446,16 @@ export function BookServicePage() {
 
               <div className="py-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500 dark:text-gray-400">Service Charge</span>
-                  <span className="text-ink-light dark:text-ink-dark">₹{serviceCharge}</span>
+                  <span className="text-gray-500 dark:text-gray-400">Provider offer</span>
+                  <span className="text-ink-light dark:text-ink-dark">₹{serviceBasePrice.toLocaleString('en-IN')}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500 dark:text-gray-400">Platform Fee</span>
-                  <span className="text-ink-light dark:text-ink-dark">₹{platformFee}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500 dark:text-gray-400">GST (18%)</span>
-                  <span className="text-ink-light dark:text-ink-dark">₹{gst}</span>
+                {discountPercentage > 0 && <div className="flex justify-between text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">Discount ({discountPercentage}%)</span>
+                  <span className="text-emerald-700 dark:text-emerald-400">−₹{(serviceBasePrice - serviceCharge).toLocaleString('en-IN')}</span>
+                </div>}
+                <div className="flex justify-between text-sm font-semibold">
+                  <span className="text-gray-500 dark:text-gray-400">Final payable price</span>
+                  <span className="text-ink-light dark:text-ink-dark">₹{serviceCharge.toLocaleString('en-IN')}</span>
                 </div>
               </div>
 

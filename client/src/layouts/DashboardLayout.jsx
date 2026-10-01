@@ -3,7 +3,7 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from '../components/common/Sidebar';
 import Topbar from '../components/common/Topbar';
 
-export function DashboardLayout({ items, title, subtitle, showSearch = false, compactHeader = false }) {
+export function DashboardLayout({ items, title, subtitle, showSearch = false, compactHeader = false, customerDashboardHeader = false }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
@@ -19,6 +19,7 @@ export function DashboardLayout({ items, title, subtitle, showSearch = false, co
           subtitle={subtitle}
           showSearch={showSearch}
           compact={compactHeader}
+          customerDashboard={customerDashboardHeader}
           onMenuClick={() => setIsSidebarOpen(true)}
         />
         <main className="flex-1 p-4 sm:p-6 lg:p-8">

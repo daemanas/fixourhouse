@@ -180,6 +180,8 @@ const providerSchema = new mongoose.Schema(
         durationMinutes: { type: Number, default: 0, min: 0 },
         duration: { type: String, default: '' },
         discountPercentage: { type: Number, default: 0, min: 0, max: 100 },
+        rating: { type: Number, default: 0, min: 0, max: 5 },
+        reviewCount: { type: Number, default: 0 },
         serviceTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceType', default: null },
         serviceCategoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', default: null },
         categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', default: null },
