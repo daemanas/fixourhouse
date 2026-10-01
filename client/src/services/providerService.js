@@ -55,4 +55,4 @@ export const deleteAvailabilityDay = (day) =>
 export const getProviderStats = () => api.get('/providers/me/stats');
 
 // Get provider earnings summary and transaction history
-export const getProviderEarnings = () => api.get('/providers/me/earnings');
+export const getProviderEarnings = (params = {}) => api.get('/providers/me/earnings', { params });

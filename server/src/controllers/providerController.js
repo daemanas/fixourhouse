@@ -1026,6 +1026,71 @@ export const getProviderEarnings = asyncHandler(async (req, res) => {
   }
 
   const data = await computeProviderEarnings(provider._id);
+  let period = null;
+
+  if (req.query.startDate || req.query.endDate) {
+    if (!req.query.startDate || !req.query.endDate) {
+      throw new ApiError(400, 'Both startDate and endDate are required for an earnings range');
+    }
+
+    const startDate = new Date(req.query.startDate);
+    const endDate = new Date(req.query.endDate);
+    const previousStartDate = req.query.previousStartDate ? new Date(req.query.previousStartDate) : null;
+    const previousEndDate = req.query.previousEndDate ? new Date(req.query.previousEndDate) : null;
+    const timeZone = req.query.timeZone || 'UTC';
+
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || startDate > endDate) {
+      throw new ApiError(400, 'Invalid earnings date range');
+    }
+    if ((req.query.previousStartDate || req.query.previousEndDate) &&
+      (!previousStartDate || !previousEndDate || Number.isNaN(previousStartDate.getTime()) ||
+        Number.isNaN(previousEndDate.getTime()) || previousStartDate > previousEndDate)) {
+      throw new ApiError(400, 'Invalid previous earnings date range');
+    }
+
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone }).format(new Date());
+    } catch {
+      throw new ApiError(400, 'Invalid earnings time zone');
+    }
+
+    const now = new Date();
+    const inRange = (transaction, rangeStart, rangeEnd) => {
+      const date = new Date(transaction.date);
+      return Number.isFinite(date.getTime()) && date >= rangeStart && date <= rangeEnd && date <= now;
+    };
+    const periodTransactions = data.transactions.filter((transaction) => inRange(transaction, startDate, endDate));
+    const previousTransactions = previousStartDate && previousEndDate
+      ? data.transactions.filter((transaction) => inRange(transaction, previousStartDate, previousEndDate))
+      : [];
+    const totalEarnings = periodTransactions.reduce((sum, transaction) => sum + Number(transaction.providerEarnings || 0), 0);
+    const previousMonthEarnings = previousTransactions.reduce((sum, transaction) => sum + Number(transaction.providerEarnings || 0), 0);
+    const dateFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const dailyEarnings = {};
+
+    periodTransactions.forEach((transaction) => {
+      const parts = Object.fromEntries(dateFormatter.formatToParts(new Date(transaction.date)).map((part) => [part.type, part.value]));
+      const day = `${parts.year}-${parts.month}-${parts.day}`;
+      dailyEarnings[day] = (dailyEarnings[day] || 0) + Number(transaction.providerEarnings || 0);
+    });
+
+    const rangeIsFuture = startDate > now;
+    period = {
+      startDate,
+      endDate,
+      totalEarnings: Math.round(totalEarnings * 100) / 100,
+      previousMonthEarnings: Math.round(previousMonthEarnings * 100) / 100,
+      monthChangePercent: rangeIsFuture ? null : safePercentageChange(totalEarnings, previousMonthEarnings),
+      transactions: periodTransactions,
+      dailyEarnings,
+      timeZone,
+    };
+  }
 
   res.status(200).json(
     new ApiResponse(
@@ -1035,6 +1100,7 @@ export const getProviderEarnings = asyncHandler(async (req, res) => {
           ...data,
           // Null when there is no previous-month data (never NaN/Infinity).
           monthChangePercent: safePercentageChange(data.thisMonth, data.lastMonthEarnings),
+          ...(period ? { period } : {}),
         },
       },
       'Earnings fetched successfully'
