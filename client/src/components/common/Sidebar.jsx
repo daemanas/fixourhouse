@@ -143,10 +143,10 @@ export function Sidebar({ items, isOpen, onClose, desktopOnly = false }) {
       )}
 
       <aside
-        className={`${desktopOnly ? 'hidden lg:sticky lg:flex' : 'fixed lg:sticky'} top-0 left-0 z-50 h-screen w-72 ${sidebarCollapsed ? 'lg:w-[84px]' : 'lg:w-72'} bg-white dark:bg-gray-900 border-r border-border-light dark:border-border-dark flex-col transition-all duration-300 lg:translate-x-0 ${desktopOnly ? '' : isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`${desktopOnly ? 'hidden lg:sticky lg:flex' : 'fixed lg:sticky'} top-0 left-0 z-50 flex h-screen max-h-screen min-h-0 w-72 ${sidebarCollapsed ? 'lg:w-[84px]' : 'lg:w-72'} flex-col overflow-hidden overscroll-contain bg-white dark:bg-gray-900 border-r border-border-light dark:border-border-dark transition-all duration-300 lg:translate-x-0 ${desktopOnly ? '' : isOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
         {/* Logo */}
-        <div className={`flex h-16 items-center border-b border-border-light dark:border-border-dark ${sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-5'}`}>
+        <div className={`flex h-16 shrink-0 items-center border-b border-border-light dark:border-border-dark ${sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-5'}`}>
           <NavLink to="/" className={`flex items-center gap-2 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
             <BrandLockup textClassName="text-ink-light dark:text-ink-dark" />
           </NavLink>
@@ -162,7 +162,7 @@ export function Sidebar({ items, isOpen, onClose, desktopOnly = false }) {
 
         {/* User info */}
         {isProvider ? (
-          <div className={`border-b border-border-light dark:border-border-dark ${sidebarCollapsed ? 'px-2 py-4' : 'px-4 py-5'}`}>
+          <div className={`shrink-0 border-b border-border-light dark:border-border-dark ${sidebarCollapsed ? 'px-2 py-4' : 'px-4 py-5'}`}>
             <div className={`flex ${sidebarCollapsed ? 'flex-col items-center gap-3 lg:gap-2' : 'items-start gap-3'}`}>
               <Avatar src={user?.avatar || providerProfile?.userId?.avatar} name={providerName} size={sidebarCollapsed ? 'md' : 'lg'} />
               <div className={`min-w-0 flex-1 pt-0.5 ${sidebarCollapsed ? 'lg:hidden' : ''}`}>
@@ -176,7 +176,7 @@ export function Sidebar({ items, isOpen, onClose, desktopOnly = false }) {
             </div>
           </div>
         ) : (
-          <div className="border-b border-border-light px-6 py-4 dark:border-border-dark">
+          <div className="shrink-0 border-b border-border-light px-6 py-4 dark:border-border-dark">
             <div className="flex items-center gap-3">
               <Avatar src={user?.avatar} name={user?.name || 'User'} size="md" />
               <div className="min-w-0"><p className="truncate text-sm font-semibold text-ink-light dark:text-ink-dark">{user?.name || 'User'}</p><p className="text-xs text-gray-500 dark:text-gray-400">{getRoleLabel()}</p></div>
@@ -185,7 +185,7 @@ export function Sidebar({ items, isOpen, onClose, desktopOnly = false }) {
         )}
 
         {/* Navigation */}
-        <nav className={`flex-1 space-y-3 overflow-y-auto py-4 ${sidebarCollapsed ? 'px-3 lg:px-2' : 'px-3'}`}>
+        <nav className={`min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto overscroll-contain py-4 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 ${sidebarCollapsed ? 'px-3 lg:px-2' : 'px-3'}`}>
           {isProvider ? (
             <>
               {providerNavigationGroups.map((group) => {
@@ -221,7 +221,7 @@ export function Sidebar({ items, isOpen, onClose, desktopOnly = false }) {
         </nav>
 
         {/* Bottom actions */}
-        <div className={`border-t border-border-light py-4 dark:border-border-dark ${sidebarCollapsed ? 'px-3 lg:px-2' : 'px-3'}`}>
+        <div className={`mt-auto shrink-0 border-t border-border-light bg-white py-4 dark:border-border-dark dark:bg-gray-900 ${sidebarCollapsed ? 'px-3 lg:px-2' : 'px-3'}`}>
           <button
             onClick={toggleTheme}
             title={sidebarCollapsed ? (theme === 'dark' ? 'Light Mode' : 'Dark Mode') : undefined}

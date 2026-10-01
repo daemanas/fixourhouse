@@ -16,7 +16,7 @@ export function DashboardLayout({ items, title, subtitle, showSearch = false, co
         desktopOnly={customerLayout}
       />
       <div className="flex-1 flex flex-col min-w-0">
-        <Topbar
+        {(!customerLayout || customerDashboardHeader) && <Topbar
           title={title}
           subtitle={subtitle}
           showSearch={showSearch}
@@ -24,7 +24,7 @@ export function DashboardLayout({ items, title, subtitle, showSearch = false, co
           customerDashboard={customerDashboardHeader}
           hideMenuButton={customerLayout}
           onMenuClick={() => setIsSidebarOpen(true)}
-        />
+        />}
         <main className={`flex-1 p-4 sm:p-6 lg:p-8 ${customerLayout ? 'pb-28 sm:pb-28 lg:pb-8' : ''}`}>
           <Outlet />
         </main>
