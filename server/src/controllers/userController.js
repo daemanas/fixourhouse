@@ -68,7 +68,8 @@ export const changePassword = asyncHandler(async (req, res) => {
 export const getWishlist = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id).populate({
     path: 'wishlist',
-    select: 'businessName category rating reviewCount jobsCompleted location pricing.currency',
+    select: 'businessName category rating reviewCount jobsCompleted experience location pricing.currency userId',
+    populate: { path: 'userId', select: 'name avatar' },
   });
 
   res.status(200).json(

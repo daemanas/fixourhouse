@@ -119,7 +119,8 @@ export const getProviderReviews = asyncHandler(async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('customerId', 'name avatar'),
+      .populate('customerId', 'name avatar')
+      .populate('serviceId', 'name'),
     Review.countDocuments(filter),
   ]);
 

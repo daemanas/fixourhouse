@@ -132,7 +132,7 @@ export const getProviders = asyncHandler(async (req, res) => {
 // @access  Public
 export const getProviderById = asyncHandler(async (req, res) => {
   const provider = await Provider.findById(req.params.id)
-    .select('-documents -earnings -isVerified -settings')
+    .select('-documents -earnings -isVerified -settings.payment -settings.notifications -settings.appearance -settings.language -settings.currency')
     .populate('userId', 'name avatar');
 
   if (!provider) {
@@ -146,6 +146,11 @@ export const getProviderById = asyncHandler(async (req, res) => {
 
   // Availability is always served in the canonical per-day structure.
   provider.availability = normalizeAvailability(provider.availability);
+  const showPhone = provider.settings?.privacy?.showPhone !== false;
+  provider.settings = undefined;
+  if (showPhone) {
+    await provider.populate('userId', 'name avatar phone');
+  }
 
   res.status(200).json(
     new ApiResponse(200, { provider }, 'Provider fetched successfully')
