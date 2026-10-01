@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
-  Search, CheckCircle2, XCircle, Ban, AlertTriangle, ShieldCheck,
+  Search, CheckCircle2, Ban, AlertTriangle, ShieldCheck,
   Loader2, Star, Eye, Calendar, Filter, ChevronDown, RefreshCw,
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
@@ -30,6 +30,14 @@ const accountStatusConfig = {
   suspended: { label: 'Suspended', variant: 'warning' },
   blocked: { label: 'Blocked', variant: 'danger' },
 };
+
+const getKycStatus = (provider) => String(
+  provider.kycStatus ?? provider.verificationStatus ?? (provider.isVerified ? 'verified' : 'pending')
+).toLowerCase();
+
+const getAccountStatus = (provider) => String(
+  provider.accountStatus ?? provider.userId?.status ?? 'active'
+).toLowerCase();
 
 export function AdminProvidersPage() {
   const navigate = useNavigate();
@@ -95,6 +103,7 @@ export function AdminProvidersPage() {
     try {
       const actionMap = {
         approve: { status: 'approved', message: 'Provider approved successfully' },
+        re_review: { status: 'approved', message: 'Provider approved successfully' },
         reject: { status: 'rejected', message: 'Provider application rejected' },
         suspend: { status: 'suspended', message: 'Provider suspended' },
         block: { status: 'blocked', message: 'Provider blocked' },
@@ -138,11 +147,11 @@ export function AdminProvidersPage() {
     { key: 'city', label: 'City / Area', render: (row) => row.location?.city || '—' },
     {
       key: 'verification', label: 'KYC Status',
-      render: (row) => <Badge variant={verificationStatusConfig[row.verificationStatus]?.variant || 'neutral'}>{verificationStatusConfig[row.verificationStatus]?.label || row.verificationStatus}</Badge>,
+      render: (row) => { const status = getKycStatus(row); const config = verificationStatusConfig[status] || { label: status, variant: 'neutral' }; return <Badge variant={config.variant}>{config.label}</Badge>; },
     },
     {
       key: 'accountStatus', label: 'Account Status',
-      render: (row) => { const s = row.userId?.status || 'active'; const c = accountStatusConfig[s] || { label: s, variant: 'neutral' }; return <Badge variant={c.variant}>{c.label}</Badge>; },
+      render: (row) => { const status = getAccountStatus(row); const config = accountStatusConfig[status] || { label: status, variant: 'neutral' }; return <Badge variant={config.variant}>{config.label}</Badge>; },
     },
     {
       key: 'rating', label: 'Rating',
@@ -163,19 +172,47 @@ export function AdminProvidersPage() {
     { key: 'created', label: 'Joined', render: (row) => row.createdAt ? new Date(row.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : '—' },
     {
       key: 'actions', label: 'Actions',
-      render: (row) => (
-        <div className="flex items-center gap-1">
-          <button onClick={(e) => { e.stopPropagation(); navigate(`/admin/providers/${row._id}`); }} className="p-1.5 rounded-lg text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors" title="View Details"><Eye className="h-4 w-4" /></button>
-          {row.verificationStatus === 'pending' && (<><button onClick={(e) => { e.stopPropagation(); handleAction(row, 'approve'); }} className="p-1.5 rounded-lg text-success-600 hover:bg-success-50 dark:hover:bg-success-900/20 transition-colors" title="Approve"><CheckCircle2 className="h-4 w-4" /></button><button onClick={(e) => { e.stopPropagation(); handleAction(row, 'reject'); }} className="p-1.5 rounded-lg text-danger-600 hover:bg-danger-50 dark:hover:bg-danger-900/20 transition-colors" title="Reject"><XCircle className="h-4 w-4" /></button></>)}
-          {row.verificationStatus === 'approved' && (<><button onClick={(e) => { e.stopPropagation(); handleAction(row, 'suspend'); }} className="p-1.5 rounded-lg text-warning-600 hover:bg-warning-50 dark:hover:bg-warning-900/20 transition-colors" title="Suspend"><AlertTriangle className="h-4 w-4" /></button><button onClick={(e) => { e.stopPropagation(); handleAction(row, 'block'); }} className="p-1.5 rounded-lg text-danger-600 hover:bg-danger-50 dark:hover:bg-danger-900/20 transition-colors" title="Block"><Ban className="h-4 w-4" /></button></>)}
-          {(row.verificationStatus === 'blocked' || row.verificationStatus === 'suspended') && (<button onClick={(e) => { e.stopPropagation(); handleAction(row, 'activate'); }} className="p-1.5 rounded-lg text-success-600 hover:bg-success-50 dark:hover:bg-success-900/20 transition-colors" title="Activate"><ShieldCheck className="h-4 w-4" /></button>)}
-        </div>
-      ),
+      render: (row) => {
+        const kycStatus = getKycStatus(row);
+        const accountStatus = getAccountStatus(row);
+        const buttonClass = 'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50';
+        const stopClick = (callback) => (event) => {
+          event.stopPropagation();
+          callback();
+        };
+
+        let statusButton;
+        if (kycStatus === 'pending') {
+          statusButton = <button type="button" onClick={stopClick(() => handleAction(row, 'approve'))} className={`${buttonClass} text-success-600 hover:bg-success-50 dark:hover:bg-success-900/20`} aria-label="Approve provider" title="Approve"><CheckCircle2 className="h-4 w-4" /></button>;
+        } else if (kycStatus === 'rejected') {
+          statusButton = <button type="button" onClick={stopClick(() => handleAction(row, 're_review'))} className={`${buttonClass} text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20`} aria-label="Review provider again" title="Review"><RefreshCw className="h-4 w-4" /></button>;
+        } else if (['verified', 'approved'].includes(kycStatus)) {
+          statusButton = <button type="button" disabled className={`${buttonClass} text-success-600`} aria-label="Provider verified" title="Verified"><CheckCircle2 className="h-4 w-4" /></button>;
+        } else {
+          statusButton = <button type="button" disabled className={`${buttonClass} text-gray-400`} aria-label={`KYC status: ${kycStatus}`} title={kycStatus}><ShieldCheck className="h-4 w-4" /></button>;
+        }
+
+        let accountButton;
+        if (accountStatus === 'active') {
+          accountButton = <button type="button" onClick={stopClick(() => handleAction(row, 'suspend'))} className={`${buttonClass} text-warning-600 hover:bg-warning-50 dark:hover:bg-warning-900/20`} aria-label="Suspend provider account" title="Suspend"><AlertTriangle className="h-4 w-4" /></button>;
+        } else if (['suspended', 'blocked'].includes(accountStatus)) {
+          accountButton = <button type="button" onClick={stopClick(() => handleAction(row, 'activate'))} className={`${buttonClass} text-success-600 hover:bg-success-50 dark:hover:bg-success-900/20`} aria-label="Activate provider account" title={accountStatus === 'blocked' ? 'Unblock' : 'Activate'}><ShieldCheck className="h-4 w-4" /></button>;
+        } else {
+          accountButton = <button type="button" disabled className={`${buttonClass} text-gray-400`} aria-label={`Account status: ${accountStatus}`} title={accountStatus}><Ban className="h-4 w-4" /></button>;
+        }
+
+        return <div className="flex w-[150px] min-w-[150px] items-center justify-center gap-2 whitespace-nowrap">
+          <button type="button" onClick={stopClick(() => navigate(`/admin/providers/${row._id}`))} className={`${buttonClass} text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20`} aria-label="View provider details" title="View Details"><Eye className="h-4 w-4" /></button>
+          {statusButton}
+          {accountButton}
+        </div>;
+      },
     },
   ];
 
   const modalConfig = {
     approve: { title: 'Approve Provider', message: `Are you sure you want to approve ${selectedProvider?.businessName}?`, confirm: 'Approve', variant: 'primary' },
+    re_review: { title: 'Review Provider', message: `Approve ${selectedProvider?.businessName} after reviewing the application again?`, confirm: 'Approve', variant: 'primary' },
     reject: { title: 'Reject Provider', message: `Are you sure you want to reject ${selectedProvider?.businessName}'s application?`, confirm: 'Reject', variant: 'danger' },
     suspend: { title: 'Suspend Provider', message: `Are you sure you want to suspend ${selectedProvider?.businessName}?`, confirm: 'Suspend', variant: 'danger' },
     block: { title: 'Block Provider', message: `Are you sure you want to block ${selectedProvider?.businessName}?`, confirm: 'Block', variant: 'danger' },

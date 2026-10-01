@@ -103,6 +103,7 @@ const bookingSchema = new mongoose.Schema(
       status: { type: String, enum: ['pending', 'paid', 'refunded'], default: 'pending' },
       transactionId: String,
       paidAt: Date,
+      refundAmount: { type: Number, min: 0, default: null },
     },
     rating: {
       type: Number,

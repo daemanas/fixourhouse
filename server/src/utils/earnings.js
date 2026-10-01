@@ -2,174 +2,186 @@ import Booking from '../models/Booking.js';
 import Payment from '../models/Payment.js';
 import Withdrawal from '../models/Withdrawal.js';
 
-// Platform fee / commission rate that LocalFix applies when a job is completed.
-// This is the same 15% used in bookingController.updateBookingStatus; the actual
-// commission recorded on each Payment document remains the source of truth.
-const PLATFORM_FEE_RATE = 0.15;
-
 const safeNumber = (value, fallback = 0) => {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : fallback;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 };
 
-/**
- * Compute a provider's earnings from real booking/payment/withdrawal data.
- *
- * - Only completed bookings generate earnings.
- * - Provider Earnings = Job Amount - Platform Fee.
- * - Available balance = total earnings - completed/processing withdrawals
- *   - pending withdrawal reservations.
- *
- * Every value is returned as a finite number (0 when no data exists) so the
- * frontend can never render NaN or Infinity.
- */
+const recordedAmount = (...values) => {
+  const value = values.find((candidate) => candidate !== null && candidate !== undefined && Number.isFinite(Number(candidate)));
+  return value === undefined ? 0 : Math.max(0, Number(value));
+};
+
+const roundMoney = (value) => Math.round(value * 100) / 100;
+
+/** Compute lifetime provider earnings, period totals, and withdrawable balance. */
 export const computeProviderEarnings = async (providerId) => {
   const [bookings, payments] = await Promise.all([
     Booking.find({ providerId })
       .sort({ createdAt: -1 })
       .populate('customerId', 'name')
-      .select('bookingId status serviceName serviceSnapshot serviceId customerId amount commission providerEarning completedAt paymentMethod payment createdAt'),
-    Payment.find({ providerId }).sort({ createdAt: -1 }),
+      .select('bookingId status serviceName serviceSnapshot serviceId customerId amount commission commissionAmount platformCommission completedAt paymentMethod payment createdAt')
+      .lean(),
+    Payment.find({ providerId }).sort({ createdAt: -1 }).lean(),
   ]);
-  const bookingById = new Map(bookings.map((booking) => [String(booking._id), booking]));
+
+  const bookingsById = new Map(bookings.map((booking) => [String(booking._id), booking]));
   const paymentBookingIds = new Set(payments.map((payment) => String(payment.bookingId)));
 
-  const paymentTransactions = payments.flatMap((payment) => {
-    const booking = bookingById.get(String(payment.bookingId));
-    const paymentStatus = payment.status || 'pending';
-    const bookingCancelled = ['cancelled', 'rejected'].includes(booking?.status);
-    if (bookingCancelled && paymentStatus === 'pending') return [];
+  const paymentTransactions = payments.map((payment) => {
+    const booking = bookingsById.get(String(payment.bookingId));
+    const status = payment.status || 'pending';
     const jobAmount = Math.max(0, safeNumber(payment.amount ?? booking?.amount));
-    // Actual commission recorded on the Payment at completion time (source of
-    // truth). Fall back to the booking's stored commission, then to the
-    // configured platform rate for legacy records that predate Payment docs.
-    const platformFee =
-      payment && Number.isFinite(Number(payment.commission))
-        ? safeNumber(payment.commission)
-        : safeNumber(booking?.commission, Math.round(jobAmount * PLATFORM_FEE_RATE));
-    const isEarning = paymentStatus === 'paid' && booking?.status === 'completed';
-    const providerEarnings = isEarning ? Math.max(
-      0,
-      payment.providerEarning != null
-        ? safeNumber(payment.providerEarning)
-        : jobAmount - platformFee
-    ) : 0;
-    const paidAt =
-      payment.paidAt || payment.refundedAt || payment.processedAt || payment.createdAt || booking?.completedAt || booking?.createdAt;
-
+    const platformFee = recordedAmount(
+      payment.platformCommission,
+      payment.commissionAmount,
+      payment.commission,
+      booking?.platformCommission,
+      booking?.commissionAmount,
+      booking?.commission
+    );
+    const paymentFee = recordedAmount(payment.paymentProcessingFee);
+    const otherProviderFee = recordedAmount(payment.otherProviderFee);
+    const isCompletedBooking = booking?.status === 'completed';
+    const isPaidEarning = status === 'paid' && isCompletedBooking;
+    const isRefundedEarning = status === 'refunded' && isCompletedBooking;
+    const countsAsEarnings = isPaidEarning || isRefundedEarning;
+    const refundAmount = isRefundedEarning
+      ? recordedAmount(payment.refundAmount, payment.amount)
+      : 0;
+    const providerEarnings = countsAsEarnings
+      ? jobAmount - platformFee - paymentFee - otherProviderFee - refundAmount
+      : 0;
+    const date = payment.paidAt || payment.refundedAt || booking?.completedAt || payment.createdAt || booking?.createdAt;
     let paymentMethod = booking?.paymentMethod || booking?.payment?.method || payment.method || 'cash';
-    if (['card', 'upi', 'netbanking', 'wallet'].includes(paymentMethod)) {
-      paymentMethod = 'online';
-    }
+    if (['card', 'upi', 'netbanking', 'wallet'].includes(paymentMethod)) paymentMethod = 'online';
 
-    const refunded = paymentStatus === 'refunded';
     return {
       id: String(payment._id),
       bookingId: booking?._id ? String(booking._id) : String(payment.bookingId),
       paymentId: String(payment._id),
-      date: paidAt,
+      date,
       customer: booking?.customerId?.name || 'Customer',
       service: booking?.serviceName || booking?.serviceSnapshot?.serviceName || 'Service',
       jobAmount,
-      platformFee: Math.max(0, platformFee),
+      grossRevenue: countsAsEarnings ? jobAmount : 0,
+      platformFee,
+      paymentFee,
+      otherProviderFee,
+      refundAmount,
       providerEarnings,
-      amount: isEarning ? providerEarnings : refunded ? -jobAmount : jobAmount,
+      amount: isPaidEarning ? providerEarnings : isRefundedEarning ? -refundAmount : jobAmount,
       paymentMethod,
-      status: paymentStatus,
-      type: refunded ? 'debit' : isEarning ? 'credit' : 'payment',
-      countsAsEarnings: isEarning,
+      status,
+      type: isRefundedEarning ? 'debit' : isPaidEarning ? 'credit' : 'payment',
+      countsAsEarnings,
     };
   });
 
-  // Preserve earnings for older completed bookings that predate Payment records.
+  // Legacy completed bookings without Payment documents use only fees/refunds
+  // actually stored on the booking snapshot; no commission rate is inferred.
   const legacyTransactions = bookings
-    .filter((booking) =>
-      booking.status === 'completed' &&
-      !paymentBookingIds.has(String(booking._id)) &&
-      (!booking.payment?.status || booking.payment.status === 'paid')
-    )
+    .filter((booking) => booking.status === 'completed' && !paymentBookingIds.has(String(booking._id)))
+    .filter((booking) => ['paid', 'refunded'].includes(booking.payment?.status))
     .map((booking) => {
       const jobAmount = Math.max(0, safeNumber(booking.amount));
-      const platformFee = safeNumber(booking.commission, Math.round(jobAmount * PLATFORM_FEE_RATE));
-      const providerEarnings = Math.max(0, jobAmount - platformFee);
-      const paidAt = booking.completedAt || booking.payment?.paidAt || booking.createdAt;
+      const platformFee = recordedAmount(booking.platformCommission, booking.commissionAmount, booking.commission);
+      const paymentFee = recordedAmount(booking.payment?.paymentProcessingFee);
+      const otherProviderFee = recordedAmount(booking.payment?.otherProviderFee);
+      const isRefunded = booking.payment.status === 'refunded';
+      const refundAmount = isRefunded ? recordedAmount(booking.payment.refundAmount, jobAmount) : 0;
+      const providerEarnings = jobAmount - platformFee - paymentFee - otherProviderFee - refundAmount;
+
       return {
         id: String(booking._id),
         bookingId: String(booking._id),
         paymentId: null,
-        date: paidAt,
+        date: booking.payment?.paidAt || booking.payment?.refundedAt || booking.completedAt || booking.createdAt,
         customer: booking.customerId?.name || 'Customer',
         service: booking.serviceName || booking.serviceSnapshot?.serviceName || 'Service',
         jobAmount,
-        platformFee: Math.max(0, platformFee),
+        grossRevenue: jobAmount,
+        platformFee,
+        paymentFee,
+        otherProviderFee,
+        refundAmount,
         providerEarnings,
-        amount: providerEarnings,
+        amount: isRefunded ? -refundAmount : providerEarnings,
         paymentMethod: booking.paymentMethod || booking.payment?.method || 'cash',
-        status: 'paid',
-        type: 'credit',
+        status: isRefunded ? 'refunded' : 'paid',
+        type: isRefunded ? 'debit' : 'credit',
         countsAsEarnings: true,
       };
     });
 
   const transactions = [...paymentTransactions, ...legacyTransactions]
     .sort((first, second) => new Date(second.date || 0) - new Date(first.date || 0));
+  const earnedTransactions = transactions.filter((transaction) => transaction.countsAsEarnings);
+  const sum = (items, field) => items.reduce((total, item) => total + safeNumber(item[field]), 0);
 
-  const sum = (items, fn) => items.reduce((total, item) => total + fn(item), 0);
-  const earningTransactions = transactions.filter((transaction) => transaction.countsAsEarnings);
-  const totalEarnings = sum(earningTransactions, (t) => t.providerEarnings);
+  const grossRevenue = sum(earnedTransactions, 'grossRevenue');
+  const platformCommission = sum(earnedTransactions, 'platformFee');
+  const paymentProcessingFees = sum(earnedTransactions, 'paymentFee');
+  const otherProviderFees = sum(earnedTransactions, 'otherProviderFee');
+  const refunds = sum(earnedTransactions, 'refundAmount');
+  const lifetimeTotalEarnings = grossRevenue - platformCommission - paymentProcessingFees - otherProviderFees - refunds;
 
   const now = new Date();
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-
+  const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const currentYearStart = new Date(now.getFullYear(), 0, 1);
   const inRange = (date, start, end) => {
-    const d = new Date(date);
-    return d >= start && (!end || d < end);
+    const value = new Date(date);
+    return Number.isFinite(value.getTime()) && value >= start && (!end || value < end);
   };
+  const currentMonthEarnings = earnedTransactions
+    .filter((transaction) => inRange(transaction.date, currentMonthStart))
+    .reduce((total, transaction) => total + safeNumber(transaction.providerEarnings), 0);
+  const previousMonthEarnings = earnedTransactions
+    .filter((transaction) => inRange(transaction.date, previousMonthStart, currentMonthStart))
+    .reduce((total, transaction) => total + safeNumber(transaction.providerEarnings), 0);
+  const thisYearEarnings = earnedTransactions
+    .filter((transaction) => inRange(transaction.date, currentYearStart))
+    .reduce((total, transaction) => total + safeNumber(transaction.providerEarnings), 0);
 
-  const thisMonth = sum(
-    earningTransactions.filter((t) => inRange(t.date, currentMonthStart)),
-    (t) => t.providerEarnings
-  );
-  const lastMonthEarnings = sum(
-    earningTransactions.filter((t) => inRange(t.date, prevMonthStart, currentMonthStart)),
-    (t) => t.providerEarnings
-  );
-
-  const [withdrawalTotals, pendingTotals] = await Promise.all([
+  const [completedWithdrawalTotals, heldWithdrawalTotals] = await Promise.all([
     Withdrawal.aggregate([
-      { $match: { providerId, status: { $in: ['completed', 'processing'] } } },
+      { $match: { providerId, status: 'completed' } },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]),
     Withdrawal.aggregate([
-      { $match: { providerId, status: 'pending' } },
+      { $match: { providerId, status: { $in: ['pending', 'processing'] } } },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]),
   ]);
-
-  const totalWithdrawn = withdrawalTotals[0]?.total || 0;
-  const pendingWithdrawals = pendingTotals[0]?.total || 0;
-  const availableBalance = Math.max(0, totalEarnings - totalWithdrawn - pendingWithdrawals);
+  const totalWithdrawn = safeNumber(completedWithdrawalTotals[0]?.total);
+  const pendingWithdrawals = safeNumber(heldWithdrawalTotals[0]?.total);
+  const availableBalance = Math.max(0, lifetimeTotalEarnings - totalWithdrawn - pendingWithdrawals);
 
   return {
     transactions,
-    totalEarnings: Math.round(totalEarnings * 100) / 100,
-    availableBalance: Math.round(availableBalance * 100) / 100,
-    thisMonth: Math.round(thisMonth * 100) / 100,
-    totalWithdrawn: Math.round(totalWithdrawn * 100) / 100,
-    pendingWithdrawals: Math.round(pendingWithdrawals * 100) / 100,
-    lastMonthEarnings: Math.round(lastMonthEarnings * 100) / 100,
+    grossRevenue: roundMoney(grossRevenue),
+    platformCommission: roundMoney(platformCommission),
+    paymentProcessingFees: roundMoney(paymentProcessingFees),
+    otherProviderFees: roundMoney(otherProviderFees),
+    refunds: roundMoney(refunds),
+    lifetimeTotalEarnings: roundMoney(lifetimeTotalEarnings),
+    netEarnings: roundMoney(lifetimeTotalEarnings),
+    totalEarnings: roundMoney(lifetimeTotalEarnings),
+    currentMonthEarnings: roundMoney(currentMonthEarnings),
+    previousMonthEarnings: roundMoney(previousMonthEarnings),
+    thisYearEarnings: roundMoney(thisYearEarnings),
+    thisMonth: roundMoney(currentMonthEarnings),
+    lastMonthEarnings: roundMoney(previousMonthEarnings),
+    availableBalance: roundMoney(availableBalance),
+    totalWithdrawn: roundMoney(totalWithdrawn),
+    pendingWithdrawals: roundMoney(pendingWithdrawals),
   };
 };
 
-/**
- * Safe percentage change: ((current - previous) / previous) * 100.
- * Returns null (never NaN/Infinity) when the previous period is missing,
- * invalid, or zero so callers can render "No previous data" instead.
- */
 export const safePercentageChange = (current, previous) => {
-  const c = Number(current);
-  const p = Number(previous);
-  if (!Number.isFinite(c) || !Number.isFinite(p) || p <= 0) return null;
-  return Math.round(((c - p) / p) * 1000) / 10;
+  const currentValue = Number(current);
+  const previousValue = Number(previous);
+  if (!Number.isFinite(currentValue) || !Number.isFinite(previousValue) || previousValue <= 0) return null;
+  return Math.round(((currentValue - previousValue) / previousValue) * 1000) / 10;
 };

@@ -43,25 +43,48 @@ const formatINR = (value) => {
   return `₹${num.toLocaleString('en-IN')}`;
 };
 
-const getMonthValue = (date = new Date()) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+const endOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
 
-const getMonthRanges = (monthValue) => {
-  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(monthValue || '');
-  if (!match) return null;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
-  const end = new Date(year, month, 0, 23, 59, 59, 999);
-  const previousStart = new Date(year, month - 2, 1, 0, 0, 0, 0);
-  const previousEnd = new Date(year, month - 1, 0, 23, 59, 59, 999);
+const buildDateRange = (start, end, previousStartOverride = null, previousEndOverride = null) => {
+  const startDate = startOfDay(start);
+  const endDate = endOfDay(end);
+  const dayCount = Math.floor((startOfDay(endDate) - startDate) / 86400000) + 1;
+  const previousEnd = previousEndOverride ? endOfDay(previousEndOverride) : new Date(startDate.getTime() - 1);
+  const previousStart = previousStartOverride
+    ? startOfDay(previousStartOverride)
+    : startOfDay(new Date(startDate.getTime() - dayCount * 86400000));
   return {
-    startDate: start.toISOString(),
-    endDate: end.toISOString(),
+    startDate: startDate.toISOString(),
+    endDate: endDate.toISOString(),
     previousStartDate: previousStart.toISOString(),
     previousEndDate: previousEnd.toISOString(),
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
   };
+};
+
+const getEarningsRange = (preset, customStart, customEnd, now = new Date()) => {
+  const today = startOfDay(now);
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  if (preset === 'this_month') return buildDateRange(new Date(year, month, 1), new Date(year, month + 1, 0), new Date(year, month - 1, 1), new Date(year, month, 0));
+  if (preset === 'last_month') return buildDateRange(new Date(year, month - 1, 1), new Date(year, month, 0), new Date(year, month - 2, 1), new Date(year, month - 1, 0));
+  if (preset === 'last_30_days') return buildDateRange(new Date(year, month, today.getDate() - 29), today);
+  if (preset === 'this_year') return buildDateRange(new Date(year, 0, 1), new Date(year, 11, 31), new Date(year - 1, 0, 1), new Date(year - 1, 11, 31));
+  if (preset === 'last_year') return buildDateRange(new Date(year - 1, 0, 1), new Date(year - 1, 11, 31), new Date(year - 2, 0, 1), new Date(year - 2, 11, 31));
+  if (preset === 'custom' && customStart && customEnd) {
+    const start = new Date(`${customStart}T00:00:00`);
+    const end = new Date(`${customEnd}T00:00:00`);
+    if (Number.isFinite(start.getTime()) && Number.isFinite(end.getTime()) && start <= end) return buildDateRange(start, end);
+  }
+  return null;
+};
+
+const localDateKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const formatRangeLabel = (start, end) => {
+  if (!start || !end) return 'Selected period';
+  const options = { day: 'numeric', month: 'short', year: 'numeric' };
+  return `${start.toLocaleDateString('en-IN', options)} – ${end.toLocaleDateString('en-IN', options)}`;
 };
 
 const getErrorMessage = (error, fallback) => {
@@ -81,7 +104,12 @@ export function EarningsPage() {
   const [withdrawals, setWithdrawals] = useState([]);
   const [jobStats, setJobStats] = useState(null);
   const [cancelledCount, setCancelledCount] = useState(null);
-  const [selectedMonth, setSelectedMonth] = useState(() => getMonthValue());
+  const [periodPreset, setPeriodPreset] = useState('this_month');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [transactionStartDate, setTransactionStartDate] = useState('');
+  const [transactionEndDate, setTransactionEndDate] = useState('');
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [transactionFilter, setTransactionFilter] = useState('all');
@@ -97,9 +125,13 @@ export function EarningsPage() {
     setLoading(true);
     setError(null);
     try {
-      const monthRange = getMonthRanges(selectedMonth);
-      if (!monthRange) throw new Error('Select a valid calendar month.');
-      const res = await getProviderEarnings(monthRange);
+      const dateRange = getEarningsRange(periodPreset, customStartDate, customEndDate);
+      if (!dateRange) {
+        setEarnings((current) => current ? { ...current, period: null } : current);
+        setLoading(false);
+        return;
+      }
+      const res = await getProviderEarnings(dateRange);
       setEarnings(res.data.data.earnings);
       const [withdrawalsResult, statsResult, cancelledResult] = await Promise.allSettled([
         getMyWithdrawals(),
@@ -120,7 +152,7 @@ export function EarningsPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedMonth]);
+  }, [periodPreset, customStartDate, customEndDate]);
 
   useEffect(() => {
     fetchEarnings();
@@ -214,58 +246,70 @@ export function EarningsPage() {
     );
   }
 
-  const monthRange = getMonthRanges(selectedMonth);
+  const selectedRange = getEarningsRange(periodPreset, customStartDate, customEndDate);
   const period = earnings?.period;
-  const transactions = period?.transactions || earnings?.transactions || [];
-  const monthChangePercent = period?.monthChangePercent ?? null;
-  const monthStart = monthRange ? new Date(monthRange.startDate) : null;
-  const monthEnd = monthRange ? new Date(monthRange.endDate) : null;
-  const monthWithdrawals = withdrawals.filter((withdrawal) => {
-    const date = new Date(withdrawal.createdAt);
-    return monthStart && monthEnd && Number.isFinite(date.getTime()) && date >= monthStart && date <= monthEnd;
-  });
+  const transactions = earnings?.transactions || [];
+  const selectedPeriodEarnings = Number(period?.selectedPeriodEarnings ?? period?.totalEarnings ?? 0);
+  const selectedStart = selectedRange ? new Date(selectedRange.startDate) : null;
+  const selectedEnd = selectedRange ? new Date(selectedRange.endDate) : null;
 
   const allTransactions = [
     ...transactions.map((transaction, index) => ({
       id: transaction.id || `credit-${transaction.date || index}-${index}`,
-      type: transaction.type === 'debit' ? 'withdrawal' : transaction.type === 'credit' ? 'credit' : 'payment',
-      title: transaction.type === 'debit' ? 'Payment Refund' : 'Booking Payment',
-      description: [transaction.service, transaction.customer].filter(Boolean).join(' · '),
+      type: transaction.type === 'debit' ? 'refund' : transaction.type === 'credit' ? 'credit' : 'payment',
+      title: transaction.type === 'debit' ? 'Payment Refund' : transaction.type === 'credit' ? 'Booking Earnings' : 'Booking Payment',
+      description: [transaction.bookingId && `Booking ${transaction.bookingId}`, transaction.service, transaction.customer].filter(Boolean).join(' · '),
+      reference: transaction.paymentId || transaction.bookingId || transaction.id,
       date: transaction.date,
       amount: Number(transaction.amount ?? transaction.providerEarnings ?? 0),
       status: transaction.status || 'paid',
+      earningStatus: transaction.countsAsEarnings ? 'earned' : 'not earned',
+      paymentStatus: transaction.status || 'paid',
     })),
-    ...monthWithdrawals.map((withdrawal) => ({
+    ...withdrawals.map((withdrawal) => ({
       id: `withdrawal-${withdrawal._id}`,
       type: 'withdrawal',
       title: withdrawal.method === 'upi' ? 'Withdrawal via UPI' : 'Withdrawal to Bank',
       description: withdrawal.method === 'upi' ? 'UPI withdrawal' : 'Bank transfer',
+      reference: withdrawal.transactionId || withdrawal._id,
       date: withdrawal.createdAt,
       amount: -Number(withdrawal.amount || 0),
       status: withdrawal.status,
+      paymentStatus: withdrawal.status,
+      earningStatus: ['completed', 'processing', 'pending'].includes(withdrawal.status) ? 'wallet movement' : 'not paid',
     })),
   ].sort((first, second) => new Date(second.date || 0) - new Date(first.date || 0));
 
   const visibleTransactions = allTransactions.filter((transaction) => {
+    const date = new Date(transaction.date);
+    if (transactionStartDate) {
+      const start = new Date(`${transactionStartDate}T00:00:00`);
+      if (!Number.isFinite(date.getTime()) || date < start) return false;
+    }
+    if (transactionEndDate) {
+      const end = new Date(`${transactionEndDate}T23:59:59.999`);
+      if (!Number.isFinite(date.getTime()) || date > end) return false;
+    }
     if (transactionFilter === 'credits') return transaction.type === 'credit';
     if (transactionFilter === 'withdrawals') return transaction.type === 'withdrawal';
     if (transactionFilter === 'pending') return ['pending', 'processing'].includes(transaction.status);
-    if (transactionFilter === 'failed') return transaction.status === 'failed';
+    if (transactionFilter === 'failed') return ['failed', 'cancelled'].includes(transaction.status);
     return true;
   });
+  const displayedTransactions = showAllTransactions ? visibleTransactions : visibleTransactions.slice(0, 5);
 
-  const [selectedYear, selectedMonthNumber] = selectedMonth.split('-').map(Number);
-  const daysInSelectedMonth = new Date(selectedYear, selectedMonthNumber, 0).getDate();
-  const chartDays = Array.from({ length: daysInSelectedMonth }, (_, index) => {
-    const dayNumber = index + 1;
-    const date = new Date(selectedYear, selectedMonthNumber - 1, dayNumber);
-    const key = `${selectedYear}-${String(selectedMonthNumber).padStart(2, '0')}-${String(dayNumber).padStart(2, '0')}`;
-    return { date, key, amount: Number(period?.dailyEarnings?.[key] || 0) };
+  const chartStart = selectedStart ? startOfDay(selectedStart) : startOfDay(new Date());
+  const chartEnd = selectedEnd ? startOfDay(selectedEnd) : startOfDay(new Date());
+  const chartDayCount = Math.max(1, Math.floor((chartEnd - chartStart) / 86400000) + 1);
+  const chartDays = Array.from({ length: chartDayCount }, (_, index) => {
+    const date = new Date(chartStart.getFullYear(), chartStart.getMonth(), chartStart.getDate() + index);
+    const key = localDateKey(date);
+    return { date, key, amount: selectedRange ? Number(period?.dailyEarnings?.[key] || 0) : 0 };
   });
 
   const chartMax = Math.max(...chartDays.map((day) => day.amount), 0);
   const chartSum = chartDays.reduce((sum, day) => sum + day.amount, 0);
-  const overviewTotal = Number(period?.totalEarnings ?? 0);
+  const overviewTotal = selectedRange ? selectedPeriodEarnings : 0;
   const chartFocus = hoveredBar || [...chartDays].reverse().find((day) => day.amount > 0) || chartDays[chartDays.length - 1] || null;
   const jobTiles = [
     { label: 'Total Jobs', value: jobStats?.totalBookings, icon: CalendarDays, tone: 'emerald' },
@@ -276,6 +320,7 @@ export function EarningsPage() {
 
   const showPayoutHistory = () => {
     setTransactionFilter('withdrawals');
+    setShowAllTransactions(true);
     document.getElementById('recent-transactions')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
@@ -324,9 +369,10 @@ export function EarningsPage() {
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-3" aria-label="Earnings summary">
         {[
-          { label: 'Total Earnings', value: formatINR(period?.totalEarnings), detail: new Date(selectedYear, selectedMonthNumber - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }), icon: TrendingUp, style: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300', change: monthChangePercent },
-          { label: 'Pending Payouts', value: formatINR(earnings.pendingWithdrawals), detail: `${withdrawals.filter((item) => item.status === 'pending').length} withdrawal requests`, icon: Clock, style: 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300' },
-          { label: 'Total Withdrawn', value: formatINR(earnings.totalWithdrawn), detail: 'All time', icon: Banknote, style: 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300' },
+          { label: 'Total Earnings', value: formatINR(earnings.lifetimeTotalEarnings ?? earnings.totalEarnings), detail: 'Lifetime', icon: TrendingUp, style: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' },
+          { label: 'This Month', value: formatINR(earnings.currentMonthEarnings ?? earnings.thisMonth), detail: new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }), icon: Calendar, style: 'bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-300' },
+          { label: 'This Year', value: formatINR(earnings.thisYearEarnings), detail: String(new Date().getFullYear()), icon: CalendarDays, style: 'bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300' },
+          { label: 'Previous Month', value: formatINR(earnings.previousMonthEarnings ?? earnings.lastMonthEarnings), detail: 'Last calendar month', icon: Clock, style: 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300' },
         ].map((item) => {
           const Icon = item.icon;
           return (
@@ -347,29 +393,29 @@ export function EarningsPage() {
       <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-card-dark sm:p-5" aria-labelledby="earnings-overview-heading">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="earnings-overview-heading" className="text-base font-bold text-gray-900 dark:text-white sm:text-lg">Earnings Overview</h2>
-          <label className="relative inline-flex min-h-9 items-center gap-2 rounded-full bg-gray-50 px-3 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-200">
-            <Calendar className="h-4 w-4" aria-hidden="true" />
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(event) => {
-                if (event.target.value) {
-                  setHoveredBar(null);
-                  setSelectedMonth(event.target.value);
-                }
-              }}
-              aria-label="Select earnings month and year"
-              className="min-w-0 cursor-pointer bg-transparent text-xs font-semibold text-gray-800 outline-none dark:text-gray-100"
-            />
-            <ChevronDown className="pointer-events-none h-3.5 w-3.5" aria-hidden="true" />
-          </label>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <label className="sr-only" htmlFor="earnings-period">Earnings period</label>
+            <select id="earnings-period" value={periodPreset} onChange={(event) => { setHoveredBar(null); setPeriodPreset(event.target.value); }} className="min-h-9 rounded-full bg-gray-50 px-3 text-xs font-semibold text-gray-800 outline-none dark:bg-gray-800 dark:text-gray-100">
+              <option value="this_month">This Month</option>
+              <option value="last_month">Last Month</option>
+              <option value="last_30_days">Last 30 Days</option>
+              <option value="this_year">This Year</option>
+              <option value="last_year">Last Year</option>
+              <option value="custom">Custom Date Range</option>
+            </select>
+            {periodPreset === 'custom' && <div className="flex items-center gap-1.5">
+              <input type="date" value={customStartDate} onChange={(event) => setCustomStartDate(event.target.value)} aria-label="Start date" className="min-h-9 min-w-0 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200" />
+              <span className="text-xs text-gray-400">to</span>
+              <input type="date" value={customEndDate} onChange={(event) => setCustomEndDate(event.target.value)} aria-label="End date" className="min-h-9 min-w-0 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200" />
+            </div>}
+          </div>
         </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-[150px_minmax(0,1fr)] sm:items-center">
           <div>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatINR(overviewTotal)}</p>
-            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{new Date(selectedYear, selectedMonthNumber - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} earnings</p>
-            {monthChangePercent !== null && monthChangePercent !== undefined && <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${monthChangePercent >= 0 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300'}`}>{monthChangePercent >= 0 ? '↑ +' : '↓ '}{monthChangePercent}%</span>}
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{selectedRange ? formatRangeLabel(selectedStart, selectedEnd) : 'Choose both dates to view a custom range'}</p>
+            {selectedRange && period?.monthChangePercent !== null && period?.monthChangePercent !== undefined && <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${period.monthChangePercent >= 0 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300'}`}>{period.monthChangePercent >= 0 ? '↑ +' : '↓ '}{period.monthChangePercent}%</span>}
           </div>
 
           <div className="relative min-w-0">
@@ -452,8 +498,8 @@ export function EarningsPage() {
 
       <section id="recent-transactions" className="space-y-3" aria-labelledby="transactions-heading">
         <div className="flex items-center justify-between gap-3">
-          <h2 id="transactions-heading" className="text-lg font-bold text-gray-900 dark:text-white">Recent Transactions</h2>
-          <Link to="/provider/withdrawals" className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-800 hover:underline dark:text-emerald-300">View All <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+          <h2 id="transactions-heading" className="text-lg font-bold text-gray-900 dark:text-white">{showAllTransactions ? 'All Transactions' : 'Recent Transactions'}</h2>
+          <button type="button" onClick={() => setShowAllTransactions((current) => !current)} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-800 hover:underline dark:text-emerald-300">{showAllTransactions ? 'Show Recent' : 'View All'} <ArrowRight className="h-4 w-4" aria-hidden="true" /></button>
         </div>
 
         <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -466,13 +512,21 @@ export function EarningsPage() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-xs font-medium text-gray-500" htmlFor="transaction-start-date">From</label>
+          <input id="transaction-start-date" type="date" value={transactionStartDate} onChange={(event) => { setTransactionStartDate(event.target.value); setShowAllTransactions(true); }} className="min-h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200" />
+          <label className="text-xs font-medium text-gray-500" htmlFor="transaction-end-date">To</label>
+          <input id="transaction-end-date" type="date" value={transactionEndDate} onChange={(event) => { setTransactionEndDate(event.target.value); setShowAllTransactions(true); }} className="min-h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200" />
+          {(transactionStartDate || transactionEndDate) && <button type="button" onClick={() => { setTransactionStartDate(''); setTransactionEndDate(''); }} className="text-xs font-semibold text-emerald-800 hover:underline dark:text-emerald-300">Clear dates</button>}
+        </div>
+
         {visibleTransactions.length === 0 ? (
           <Card className="rounded-2xl p-2 sm:p-4"><EmptyState icon={Wallet} title="No transactions found" description="Completed job earnings and withdrawal activity will appear here." /></Card>
         ) : (
           <div className="space-y-2">
-            {visibleTransactions.map((transaction) => {
+            {displayedTransactions.map((transaction) => {
               const isCredit = transaction.type === 'credit';
-              const isDebit = transaction.type === 'withdrawal';
+              const isDebit = ['withdrawal', 'refund'].includes(transaction.type);
               const statusLabel = transaction.status === 'credited' ? 'Credited'
                 : transaction.status === 'completed' ? 'Transferred'
                   : transaction.status === 'processing' ? 'Processing'
@@ -488,7 +542,8 @@ export function EarningsPage() {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-gray-900 dark:text-white">{transaction.title}</span>
                     <span className="mt-0.5 block truncate text-xs text-gray-600 dark:text-gray-300">{transaction.description || '—'}</span>
-                    <span className="mt-0.5 block truncate text-[10px] text-gray-400">{transaction.date ? new Date(transaction.date).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</span>
+                    <span className="mt-0.5 block truncate text-[10px] text-gray-400">{transaction.date ? new Date(transaction.date).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}{transaction.reference ? ` · Ref ${String(transaction.reference).slice(-8)}` : ''}</span>
+                    <span className="mt-0.5 block truncate text-[10px] text-gray-400">{transaction.type === 'withdrawal' ? `Withdrawal ${transaction.status} · wallet movement` : `Payment ${transaction.paymentStatus} · ${transaction.earningStatus || 'wallet record'}`}</span>
                   </span>
                   <span className="flex shrink-0 flex-col items-end gap-1">
                     <span className={`text-sm font-bold sm:text-base ${isCredit ? 'text-emerald-700 dark:text-emerald-400' : isDebit ? 'text-rose-700 dark:text-rose-400' : 'text-gray-700 dark:text-gray-300'}`}>{isCredit ? '+ ' : isDebit ? '− ' : ''}{formatINR(Math.abs(transaction.amount))}</span>
@@ -501,7 +556,7 @@ export function EarningsPage() {
         )}
       </section>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-gray-200 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 shadow-[0_-4px_18px_rgba(16,24,40,0.06)] backdrop-blur dark:border-gray-800 dark:bg-gray-950/95 sm:hidden" aria-label="Provider navigation">
+      {/* <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-gray-200 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 shadow-[0_-4px_18px_rgba(16,24,40,0.06)] backdrop-blur dark:border-gray-800 dark:bg-gray-950/95 sm:hidden" aria-label="Provider navigation">
         {[
           { label: 'Home', to: '/provider/dashboard', icon: Home },
           { label: 'Jobs', to: '/provider/jobs', icon: Briefcase },
@@ -509,7 +564,7 @@ export function EarningsPage() {
           { label: 'Reviews', to: '/provider/reviews', icon: Star },
           { label: 'Profile', to: '/provider/profile', icon: UserRound },
         ].map(({ label, to, icon: Icon, active }) => <Link key={label} to={to} aria-current={active ? 'page' : undefined} className={`flex min-h-11 flex-col items-center justify-center gap-0.5 text-[9px] font-semibold ${active ? 'text-emerald-700 dark:text-emerald-300' : 'text-gray-400'}`}><Icon className={`h-5 w-5 ${active ? 'rounded-lg bg-emerald-50 p-0.5 dark:bg-emerald-900/20' : ''}`} aria-hidden="true" />{label}</Link>)}
-      </nav>
+      </nav> */}
 
       {/* Withdrawal modal */}
       <Modal

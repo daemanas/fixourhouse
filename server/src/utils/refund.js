@@ -5,12 +5,9 @@ import ApiError from './ApiError.js';
 /**
  * Process a refund for a booking's payment.
  *
- * This ONLY flips the Payment status to 'refunded' and mirrors that status onto
- * Booking.payment.status. It does NOT touch provider earnings, because:
- *   - revenueReport excludes refunded payments from gross and counts them as refunds
- *   - earnings util only sums payments with status 'paid'
- * So marking a payment as refunded removes it from both gross revenue and
- * provider earnings automatically — no double counting, no util changes required.
+ * Persist the actual refund amount on the Payment record and mirror the refund
+ * status/amount onto the booking snapshot. The shared earnings calculation
+ * includes that amount as a deduction.
  *
  * Idempotent: if the payment is already refunded it returns { alreadyRefunded: true }.
  *
@@ -26,15 +23,16 @@ export async function processRefund(bookingId, { amount } = {}) {
   }
 
   if (payment.status === 'refunded') {
-    return { alreadyRefunded: true, payment, refundAmount: payment.amount };
+    return { alreadyRefunded: true, payment, refundAmount: payment.refundAmount ?? payment.amount };
   }
 
   const refundAmount = amount != null ? Number(amount) : payment.amount;
-  if (Number.isNaN(refundAmount) || refundAmount < 0) {
+  if (!Number.isFinite(refundAmount) || refundAmount < 0 || refundAmount > payment.amount) {
     throw new ApiError(400, 'Invalid refund amount.');
   }
 
   payment.status = 'refunded';
+  payment.refundAmount = refundAmount;
   payment.refundedAt = new Date();
   await payment.save();
 
@@ -45,6 +43,7 @@ export async function processRefund(bookingId, { amount } = {}) {
       $set: {
         'payment.status': 'refunded',
         'payment.refundedAt': payment.refundedAt,
+        'payment.refundAmount': refundAmount,
       },
     }
   );

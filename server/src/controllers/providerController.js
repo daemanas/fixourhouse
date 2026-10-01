@@ -1099,7 +1099,9 @@ export const getProviderEarnings = asyncHandler(async (req, res) => {
     period = {
       startDate,
       endDate,
+      selectedPeriodEarnings: Math.round(totalEarnings * 100) / 100,
       totalEarnings: Math.round(totalEarnings * 100) / 100,
+      previousPeriodEarnings: Math.round(previousMonthEarnings * 100) / 100,
       previousMonthEarnings: Math.round(previousMonthEarnings * 100) / 100,
       monthChangePercent: rangeIsFuture ? null : safePercentageChange(totalEarnings, previousMonthEarnings),
       transactions: periodTransactions,
@@ -1143,6 +1145,10 @@ export const getAdminProviderDetail = asyncHandler(async (req, res) => {
   }
 
   const pid = provider._id;
+  const completedReviewBookingIds = await Booking.distinct('_id', {
+    providerId: pid,
+    status: 'completed',
+  });
 
   const [
     standaloneServices,
@@ -1166,7 +1172,11 @@ export const getAdminProviderDetail = asyncHandler(async (req, res) => {
       .limit(50)
       .populate('customerId', 'name phone')
       .populate('serviceId', 'name price'),
-    Review.find({ providerId: pid })
+    Review.find({
+      providerId: pid,
+      bookingId: { $in: completedReviewBookingIds },
+      isVisible: true,
+    })
       .sort({ createdAt: -1 })
       .populate('customerId', 'name avatar'),
     Withdrawal.find({ providerId: pid }).sort({ createdAt: -1 }),
@@ -1176,6 +1186,11 @@ export const getAdminProviderDetail = asyncHandler(async (req, res) => {
       .populate('reporterId', 'name'),
     computeProviderEarnings(pid),
   ]);
+
+  provider.rating = reviews.length
+    ? Number((reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length).toFixed(1))
+    : 0;
+  provider.reviewCount = reviews.length;
 
   // Reconcile the two service sources so the admin Services tab shows exactly
   // what the provider sees under "My Services". Prefer the embedded services
@@ -1255,23 +1270,30 @@ export const getAdminProviderDetail = asyncHandler(async (req, res) => {
   twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
   twelveMonthsAgo.setDate(1);
   twelveMonthsAgo.setHours(0, 0, 0, 0);
-  const monthlyEarnings = await Payment.aggregate([
-    {
-      $match: {
-        providerId: pid,
-        status: 'paid',
-        paidAt: { $gte: twelveMonthsAgo },
-      },
-    },
-    {
-      $group: {
-        _id: { $dateToString: { format: '%Y-%m', date: '$paidAt' } },
-        revenue: { $sum: '$amount' },
-        commission: { $sum: '$commission' },
-      },
-    },
-    { $sort: { _id: 1 } },
-  ]);
+  const monthlyEarningsMap = new Map();
+  earningsData.transactions.forEach((transaction) => {
+    if (!transaction.countsAsEarnings || !transaction.date) return;
+    const date = new Date(transaction.date);
+    if (date < twelveMonthsAgo) return;
+    const month = date.toISOString().slice(0, 7);
+    const current = monthlyEarningsMap.get(month) || {
+      _id: month,
+      revenue: 0,
+      commission: 0,
+      paymentProcessingFees: 0,
+      otherProviderFees: 0,
+      refunds: 0,
+      providerEarnings: 0,
+    };
+    current.revenue += Number(transaction.grossRevenue || 0);
+    current.commission += Number(transaction.platformFee || 0);
+    current.paymentProcessingFees += Number(transaction.paymentFee || 0);
+    current.otherProviderFees += Number(transaction.otherProviderFee || 0);
+    current.refunds += Number(transaction.refundAmount || 0);
+    current.providerEarnings += Number(transaction.providerEarnings || 0);
+    monthlyEarningsMap.set(month, current);
+  });
+  const monthlyEarnings = [...monthlyEarningsMap.values()].sort((a, b) => a._id.localeCompare(b._id));
 
   // Booking status distribution (real, for the overview donut/summary).
   const bookingStatusAgg = await Booking.aggregate([

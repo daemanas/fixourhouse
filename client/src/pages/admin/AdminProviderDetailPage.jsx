@@ -49,6 +49,7 @@ export function AdminProviderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [bookingFilter, setBookingFilter] = useState('all');
+  const [showEarningsBreakdown, setShowEarningsBreakdown] = useState(false);
 
   // Status Action Modal
   const [modalType, setModalType] = useState(null);
@@ -159,9 +160,12 @@ export function AdminProviderDetailPage() {
   const cancelledBookings = (bookingStatusCounts.cancelled || 0) + (bookingStatusCounts.rejected || 0);
   const cancellationRate = totalBookings > 0 ? ((cancelledBookings / totalBookings) * 100).toFixed(1) : '0.0';
 
-  // Real earnings aggregates derived from the transaction list returned by the API.
-  const grossRevenue = (earnings.transactions || []).reduce((sum, t) => sum + (t.jobAmount || 0), 0);
-  const totalCommission = (earnings.transactions || []).reduce((sum, t) => sum + (t.platformFee || 0), 0);
+  const grossRevenue = Number(earnings.grossRevenue || 0);
+  const totalCommission = Number(earnings.platformCommission || 0);
+  const paymentFees = Number(earnings.paymentProcessingFees || 0);
+  const otherProviderFees = Number(earnings.otherProviderFees || 0);
+  const refunds = Number(earnings.refunds || 0);
+  const netEarnings = Number(earnings.netEarnings ?? earnings.totalEarnings ?? 0);
 
   const modalConfig = {
     approve: { title: 'Approve Provider', message: `Approve ${provider.businessName}'s provider account?`, confirm: 'Approve', variant: 'primary' },
@@ -252,9 +256,10 @@ export function AdminProviderDetailPage() {
             </div>
             <div className="text-right">
               <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                ₹{(earnings.totalEarnings || 0).toLocaleString('en-IN')}
+                ₹{netEarnings.toLocaleString('en-IN')}
               </span>
               <p className="text-xs text-gray-400">Total Net Earnings</p>
+              <button type="button" onClick={() => setShowEarningsBreakdown(true)} className="mt-1 text-xs font-semibold text-primary-700 hover:underline dark:text-primary-300">View Breakdown</button>
             </div>
           </div>
         </div>
@@ -422,12 +427,27 @@ export function AdminProviderDetailPage() {
       {/* EARNINGS TAB */}
       {activeTab === 'earnings' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <StatCard title="Gross Revenue" value={`₹${grossRevenue.toLocaleString('en-IN')}`} icon={DollarSign} color="primary" />
             <StatCard title="Platform Commission" value={`₹${totalCommission.toLocaleString('en-IN')}`} icon={TrendingUp} color="secondary" />
-            <StatCard title="Net Provider Payout" value={`₹${(earnings.totalEarnings || 0).toLocaleString('en-IN')}`} icon={CheckCircle2} color="success" />
+            <StatCard title="Payment Fees" value={`₹${paymentFees.toLocaleString('en-IN')}`} icon={Percent} color="warning" />
+            <StatCard title="Other Provider Fees" value={`₹${otherProviderFees.toLocaleString('en-IN')}`} icon={DollarSign} color="warning" />
+            <StatCard title="Refunds / Adjustments" value={`₹${refunds.toLocaleString('en-IN')}`} icon={XCircle} color="danger" />
+            <StatCard title="Net Earnings" value={`₹${netEarnings.toLocaleString('en-IN')}`} icon={CheckCircle2} color="success" />
             <StatCard title="Pending Payouts" value={`₹${(earnings.pendingWithdrawals || 0).toLocaleString('en-IN')}`} icon={Clock} color="warning" />
           </div>
+
+          <Card className="p-6">
+            <h3 className="text-lg font-bold text-ink-light dark:text-ink-dark mb-4">Earnings Breakdown</h3>
+            <div className="divide-y divide-gray-100 dark:divide-gray-800 text-sm">
+              <div className="py-3 flex justify-between"><span className="text-gray-500">Gross Revenue</span><span className="font-medium">₹{grossRevenue.toLocaleString('en-IN')}</span></div>
+              <div className="py-3 flex justify-between"><span className="text-gray-500">Platform Commission</span><span className="font-medium">− ₹{totalCommission.toLocaleString('en-IN')}</span></div>
+              <div className="py-3 flex justify-between"><span className="text-gray-500">Payment Processing Fees</span><span className="font-medium">− ₹{paymentFees.toLocaleString('en-IN')}</span></div>
+              <div className="py-3 flex justify-between"><span className="text-gray-500">Other Provider Fees</span><span className="font-medium">− ₹{otherProviderFees.toLocaleString('en-IN')}</span></div>
+              <div className="py-3 flex justify-between"><span className="text-gray-500">Refunds / Adjustments</span><span className="font-medium">− ₹{refunds.toLocaleString('en-IN')}</span></div>
+              <div className="flex justify-between pt-4 text-base font-bold"><span>Net Earnings</span><span className="text-emerald-700 dark:text-emerald-300">₹{netEarnings.toLocaleString('en-IN')}</span></div>
+            </div>
+          </Card>
 
           <Card className="p-6">
             <h3 className="text-lg font-bold text-ink-light dark:text-ink-dark mb-4">Payout Transaction Summary</h3>
@@ -615,6 +635,17 @@ export function AdminProviderDetailPage() {
           )}
         </Card>
       )}
+
+      <Modal isOpen={showEarningsBreakdown} onClose={() => setShowEarningsBreakdown(false)} title="Net Earnings Breakdown" size="sm">
+        <div className="divide-y divide-gray-100 text-sm dark:divide-gray-800">
+          <div className="flex justify-between py-3"><span className="text-gray-500">Gross Revenue</span><span className="font-medium">₹{grossRevenue.toLocaleString('en-IN')}</span></div>
+          <div className="flex justify-between py-3"><span className="text-gray-500">Platform Commission</span><span>− ₹{totalCommission.toLocaleString('en-IN')}</span></div>
+          <div className="flex justify-between py-3"><span className="text-gray-500">Payment Fees</span><span>− ₹{paymentFees.toLocaleString('en-IN')}</span></div>
+          <div className="flex justify-between py-3"><span className="text-gray-500">Other Provider Fees</span><span>− ₹{otherProviderFees.toLocaleString('en-IN')}</span></div>
+          <div className="flex justify-between py-3"><span className="text-gray-500">Refunds / Adjustments</span><span>− ₹{refunds.toLocaleString('en-IN')}</span></div>
+          <div className="flex justify-between pt-4 text-base font-bold"><span>Net Earnings</span><span className="text-emerald-700 dark:text-emerald-300">₹{netEarnings.toLocaleString('en-IN')}</span></div>
+        </div>
+      </Modal>
 
       {/* STATUS CHANGE CONFIRMATION MODAL */}
       <Modal
