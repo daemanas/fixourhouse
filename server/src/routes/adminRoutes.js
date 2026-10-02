@@ -1,4 +1,9 @@
 import { Router } from 'express';
+import { loginAdmin, getAdminSession, logoutAdmin } from '../controllers/adminAuthController.js';
+import { adminProtect } from '../middlewares/adminAuth.js';
+import { adminLoginValidator } from '../validators/adminAuthValidator.js';
+import { validate } from '../middlewares/validate.js';
+import { authLimiter } from '../config/rateLimiter.js';
 import {
   getStats,
   getAnalytics,
@@ -29,8 +34,6 @@ import {
   getAdminProviderDetail,
   updateProviderDocumentStatus,
 } from '../controllers/providerController.js';
-import { protect, authorize } from '../middlewares/index.js';
-import { validate } from '../middlewares/validate.js';
 import { updateComplaintValidator } from '../validators/complaintValidator.js';
 import {
   getAdminWebsiteSettings,
@@ -55,7 +58,10 @@ import {
 
 const router = Router();
 
-router.use(protect, authorize('admin'));
+router.post('/auth/login', authLimiter, validate(adminLoginValidator), loginAdmin);
+router.use(adminProtect);
+router.get('/auth/me', getAdminSession);
+router.post('/auth/logout', logoutAdmin);
 
 router.get('/stats', getStats);
 router.get('/analytics', getAnalytics);

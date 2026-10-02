@@ -16,6 +16,20 @@ async function login(phone, password) {
   return data.data.token;
 }
 
+async function loginAdmin() {
+  if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) {
+    throw new Error('Set ADMIN_EMAIL and ADMIN_PASSWORD in the server environment.');
+  }
+  const res = await fetch(`${BASE}/admin/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`admin login failed (${res.status})`);
+  return data.data.token;
+}
+
 async function main() {
   await connectDB();
   // Ensure a known customer password so we can exercise the real auth + complaint flow.
@@ -26,7 +40,7 @@ async function main() {
   console.log('set known customer password');
 
   const custToken = await login(CUST_PHONE, CUST_PW);
-  const adminToken = await login('9000000001', 'Admin@123');
+  const adminToken = await loginAdmin();
   console.log('customer login OK, admin login OK');
 
   // customer bookings (eligible)

@@ -100,14 +100,16 @@ async function main() {
   log('Provider login returns role', provLogin.data?.data?.user?.role === 'provider');
   const provToken = provLogin.data?.data?.token || providerToken;
 
-  // ========== 7. LOGIN — ADMIN ==========
+  // ========== 7. DEDICATED ADMIN LOGIN ==========
   console.log('\n── Admin Login ──');
-  const adminLogin = await req('POST', '/auth/login', {
-    phone: process.env.ADMIN_PHONE || '9000000001',
-    password: process.env.ADMIN_PASSWORD || 'Admin@123',
-  });
-  log('Admin login returns 200', adminLogin.status === 200, `status=${adminLogin.status}`);
-  log('Admin login returns role', adminLogin.data?.data?.user?.role === 'admin');
+  const adminLogin = process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD
+    ? await req('POST', '/admin/auth/login', {
+      email: process.env.ADMIN_EMAIL,
+      password: process.env.ADMIN_PASSWORD,
+    })
+    : { status: 503, data: {} };
+  log('Dedicated admin login returns 200', adminLogin.status === 200, `status=${adminLogin.status}`);
+  log('Admin login returns admin role', adminLogin.data?.data?.admin?.role === 'admin');
   const adminToken = adminLogin.data?.data?.token;
 
   // ========== 8. LOGIN FAILURE ==========
@@ -125,14 +127,18 @@ async function main() {
   log('Customer /auth/me returns 200', meCust.status === 200, `status=${meCust.status}`);
   log('Customer /auth/me returns correct role', meCust.data?.data?.user?.role === 'customer');
 
-  const meAdmin = await req('GET', '/auth/me', null, adminToken);
-  log('Admin /auth/me returns 200', meAdmin.status === 200, `status=${meAdmin.status}`);
-  log('Admin /auth/me returns correct role', meAdmin.data?.data?.user?.role === 'admin');
+  const meAdmin = await req('GET', '/admin/auth/me', null, adminToken);
+  log('Admin /admin/auth/me returns 200', meAdmin.status === 200, `status=${meAdmin.status}`);
+  log('Admin session returns correct role', meAdmin.data?.data?.admin?.role === 'admin');
 
   // ========== 10. ROLE PROTECTION (admin routes) ==========
   console.log('\n── Role-based Protection ──');
   const adminOnly = await req('GET', '/admin/users', null, custToken);
   log('Customer accessing admin route returns 403', adminOnly.status === 403, `status=${adminOnly.status}`);
+  const providerAdminRoute = await req('GET', '/admin/users', null, provToken);
+  log('Provider accessing admin route returns 403', providerAdminRoute.status === 403, `status=${providerAdminRoute.status}`);
+  const regularAuthAdmin = await req('GET', '/auth/me', null, adminToken);
+  log('Admin token is rejected by regular auth', regularAuthAdmin.status === 403, `status=${regularAuthAdmin.status}`);
 
   // ========== 11. EXPIRED/INVALID TOKEN ==========
   console.log('\n── Invalid/Expired Token ──');
@@ -163,7 +169,13 @@ async function main() {
 
   // ========== 14. LOGOUT ==========
   console.log('\n── Logout ──');
-  log('Logout is client-side (token cleared)', true, 'No server logout endpoint required');
+  if (adminToken) {
+    const adminLogout = await req('POST', '/admin/auth/logout', {}, adminToken);
+    log('Admin logout returns 200', adminLogout.status === 200, `status=${adminLogout.status}`);
+    const adminAfterLogout = await req('GET', '/admin/auth/me', null, adminToken);
+    log('Admin session is revoked after logout', adminAfterLogout.status === 401, `status=${adminAfterLogout.status}`);
+  }
+  log('Customer logout is client-side (token cleared)', true, 'The current customer auth flow clears its client token');
   const afterLogout = await req('GET', '/auth/me', null, custToken);
   log('Token still works until expiry (client clears on logout)', afterLogout.status === 200);
 

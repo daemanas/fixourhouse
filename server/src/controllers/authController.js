@@ -19,6 +19,7 @@ const duplicatePhoneError = () =>
   new ApiError(409, 'An account already exists with this phone number. Please login instead.', [], 'PHONE_ALREADY_EXISTS');
 const duplicateEmailError = () =>
   new ApiError(409, 'An account already exists with this email address. Please login instead.', [], 'EMAIL_ALREADY_EXISTS');
+const rejectAdminFromUserAuth = () => new ApiError(401, 'Invalid credentials');
 
 const deliverOtp = (channel, identifier, otp) =>
   channel === 'email' ? emailService.sendOtpEmail(identifier, otp) : sendOtpSms(identifier, otp);
@@ -64,6 +65,7 @@ export const requestLoginOtp = asyncHandler(async (req, res) => {
   if (!user) {
     throw new ApiError(404, `No LocalFix account exists with this ${channel === 'email' ? 'email address' : 'phone number'}. Please sign up.`, [], 'USER_NOT_FOUND');
   }
+  if (user.role === 'admin') throw rejectAdminFromUserAuth();
   if (user.status === 'blocked' || user.status === 'suspended') {
     throw new ApiError(403, 'This account cannot sign in. Please contact support.');
   }
@@ -140,6 +142,7 @@ export const googleAuth = asyncHandler(async (req, res) => {
   if (user.status === 'blocked' || user.status === 'suspended') {
     throw new ApiError(403, 'This account cannot sign in. Please contact support.');
   }
+  if (user.role === 'admin') throw rejectAdminFromUserAuth();
 
   user.emailVerified = true;
   return issueSession(user, res, 200, 'Google sign-in successful');
@@ -191,6 +194,7 @@ export const verifyOtp = asyncHandler(async (req, res) => {
     if (purpose === 'reset-password') {
       user = await User.findOne({ email: identifier });
       if (!user) throw new ApiError(404, 'User not found', [], 'USER_NOT_FOUND');
+      if (user.role === 'admin') throw rejectAdminFromUserAuth();
       if (user.status === 'blocked' || user.status === 'suspended') {
         throw new ApiError(403, 'This account cannot reset its password. Please contact support.');
       }
@@ -230,6 +234,7 @@ export const verifyOtp = asyncHandler(async (req, res) => {
     } else {
       user = await User.findOne(channel === 'email' ? { email: identifier } : { phone: identifier });
       if (!user) throw new ApiError(400, 'Invalid or expired OTP. Please request a new OTP.');
+      if (user.role === 'admin') throw rejectAdminFromUserAuth();
       if (user.status === 'blocked' || user.status === 'suspended') {
         throw new ApiError(403, 'This account cannot sign in. Please contact support.');
       }
@@ -246,6 +251,7 @@ export const verifyOtp = asyncHandler(async (req, res) => {
   if (!user) {
     throw new ApiError(404, 'User not found', [], 'USER_NOT_FOUND');
   }
+  if (user.role === 'admin') throw rejectAdminFromUserAuth();
 
   if (
     !user.otp?.code
@@ -329,6 +335,7 @@ export const resendOtp = asyncHandler(async (req, res) => {
   if (purpose === 'reset-password' && phone) {
     const user = await User.findOne({ phone });
     if (!user) throw new ApiError(404, 'User not found');
+    if (user.role === 'admin') throw rejectAdminFromUserAuth();
     if (user.otp?.purpose === 'reset-password' && user.otp.resendAvailableAt > new Date()) {
       throw new ApiError(429, 'Please wait before requesting another verification code.');
     }
@@ -361,9 +368,11 @@ export const resendOtp = asyncHandler(async (req, res) => {
   if (purpose === 'login') {
     const user = await User.findOne(channel === 'email' ? { email: identifier } : { phone: identifier });
     if (!user) throw new ApiError(404, 'User not found', [], 'USER_NOT_FOUND');
+    if (user.role === 'admin') throw rejectAdminFromUserAuth();
   } else if (purpose === 'reset-password') {
     const user = await User.findOne({ email: identifier });
     if (!user) throw new ApiError(404, 'User not found', [], 'USER_NOT_FOUND');
+    if (user.role === 'admin') throw rejectAdminFromUserAuth();
     if (user.status === 'blocked' || user.status === 'suspended') {
       throw new ApiError(403, 'This account cannot reset its password. Please contact support.');
     }
@@ -388,7 +397,7 @@ export const login = asyncHandler(async (req, res) => {
   const { phone, password } = req.body;
 
   const user = await User.findOne({ phone }).select('+password');
-  if (!user) {
+  if (!user || user.role === 'admin') {
     throw new ApiError(401, 'Invalid phone number or password');
   }
 
@@ -440,6 +449,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   if (!user) {
     throw new ApiError(404, 'No LocalFix account exists with this email address.', [], 'USER_NOT_FOUND');
   }
+  if (user.role === 'admin') throw rejectAdminFromUserAuth();
 
   if (user.status === 'blocked' || user.status === 'suspended') {
     throw new ApiError(403, 'This account cannot reset its password. Please contact support.');
@@ -470,6 +480,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
   if (!user) {
     throw new ApiError(400, 'Invalid or expired reset token');
   }
+  if (user.role === 'admin') throw rejectAdminFromUserAuth();
 
   user.password = password;
   user.resetPasswordToken = undefined;

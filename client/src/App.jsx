@@ -1,6 +1,7 @@
 import { Navigate, Routes, Route, useParams, useSearchParams } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { ProtectedRoute } from './routes/ProtectedRoute';
+import { AdminProtectedRoute } from './routes/AdminProtectedRoute';
 import { PublicOnlyRoute } from './routes/PublicOnlyRoute';
 import env from './config/env';
 
@@ -20,6 +21,8 @@ const RegisterPage = lazy(() => import('./pages/auth/RegisterPage'));
 const OtpPage = lazy(() => import('./pages/auth/OtpPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'));
+const AdminLoginPage = lazy(() => import('./pages/admin/AdminLoginPage'));
+const AdminForgotPasswordPage = lazy(() => import('./pages/admin/AdminForgotPasswordPage'));
 
 // Customer pages
 const CustomerDashboard = lazy(() => import('./pages/customer/CustomerDashboard'));
@@ -132,6 +135,8 @@ function App() {
         </Route>
 
         {/* Auth routes */}
+        <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route path="/admin/forgot-password" element={<AdminForgotPasswordPage />} />
         <Route element={<PublicOnlyRoute><AuthLayout /></PublicOnlyRoute>}>
           <Route path="/auth/login" element={<LoginPage />} />
           <Route path="/auth/register" element={<RegisterPage />} />
@@ -173,10 +178,12 @@ function App() {
         </Route>
 
         {/* Admin routes */}
-        <Route element={<ProtectedRoute roles={[env.ROLES.ADMIN]}><AdminLayout /></ProtectedRoute>}>
-          <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
+        <Route element={<AdminProtectedRoute><AdminLayout /></AdminProtectedRoute>}>
+          <Route path="/admin" element={<AdminAnalyticsPage />} />
           <Route path="/admin/dashboard" element={<AdminAnalyticsPage />} />
+          <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
           <Route path="/admin/service-catalog" element={<AdminServiceCatalogPage />} />
+          <Route path="/admin/services" element={<AdminServiceCatalogPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/customers" element={<AdminCustomersPage />} />
           <Route path="/admin/customers/:id" element={<AdminCustomerDetailPage />} />
@@ -188,10 +195,12 @@ function App() {
           <Route path="/admin/complaints" element={<AdminComplaintsPage />} />
           <Route path="/admin/complaints/:id" element={<AdminComplaintDetailPage />} />
           <Route path="/admin/revenue" element={<AdminRevenuePage />} />
+          <Route path="/admin/payouts" element={<AdminRevenuePage />} />
           <Route path="/admin/settings" element={<AdminSettingsPage />} />
           <Route path="/admin/website-settings" element={<AdminWebsiteSettingsPage />} />
           <Route path="/admin/provider-commission" element={<AdminProviderCommissionPage />} />
           <Route path="/admin/notifications" element={<NotificationsPage />} />
+          <Route path="/admin/*" element={<NotFoundPage />} />
         </Route>
 
         {/* 404 */}

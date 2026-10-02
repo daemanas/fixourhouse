@@ -51,9 +51,11 @@ Joi's default `allowUnknown: false` rejected `query`/`params` because `authValid
 | `server/src/middlewares/validate.js` | **Critical fix:** validate only schema keys present (`body`/`query`/`params`). |
 | `server/src/controllers/authController.js` | Auto-create `Provider` record on provider registration. `verifyOtp` supports `purpose: 'reset-password'` → returns `resetToken` instead of JWT. |
 | `server/src/validators/authValidator.js` | Normalize phone (`+91`, spaces) → 10-digit; added `purpose` field to OTP validator. |
-| `server/src/seed.js` | **Created:** seeds admin user + default categories. |
-| `server/.env` | **Created:** JWT_SECRET, JWT_REFRESH_SECRET, ADMIN_PHONE, ADMIN_PASSWORD, etc. |
-| `server/src/auth-test.js` | **Created:** 32-test e2e auth suite. |
+| `server/src/seed.js` | Seeds sample categories; admin credentials are no longer seeded into `User`. |
+| `server/.env` | Ignored local configuration; never commit its values. |
+| `server/src/auth-test.js` | E2E auth suite now uses the dedicated admin login endpoint and configured environment credentials. |
+| `server/src/controllers/adminAuthController.js` | Dedicated `ADMIN_EMAIL` / `ADMIN_PASSWORD` login, scoped JWTs, and session revocation. |
+| `server/src/middlewares/adminAuth.js` | Protects every admin API with a separate admin token and active-session check. |
 
 ### Frontend
 | File | Change |
@@ -63,6 +65,8 @@ Joi's default `allowUnknown: false` rejected `query`/`params` because `authValid
 | `client/src/pages/auth/ResetPasswordPage.jsx` | Wired to API (`authService.resetPassword`). |
 | `client/src/pages/auth/OtpPage.jsx` | Fixed purpose handling + role redirect path (`result.user.role`). |
 | `client/src/context/AuthContext.jsx` | Fixed `refreshUser` for `getMe` response shape. |
+| `client/src/pages/admin/AdminLoginPage.jsx` | Separate responsive admin login UI at `/admin/login`. |
+| `client/src/context/AdminAuthContext.jsx` | Keeps admin sessions separate from customer/provider auth. |
 | `client/.env` | **Fixed:** `VITE_API_URL=http://localhost:5000/api/v1`. |
 
 ---
@@ -73,13 +77,13 @@ Joi's default `allowUnknown: false` rejected `query`/`params` because `authValid
 2. **Provider profile on registration** — `Provider.create({ userId, businessName, category })` runs when `role === 'provider'`.
 3. **API base URL** — corrected to `/api/v1` in `client/.env`.
 4. **Forgot/Reset Password flow** —
-   - `POST /auth/forgot-password { phone }` → sends OTP
-   - `POST /auth/otp-verify { phone, otp, purpose: 'reset-password' }` → returns `resetToken`
+   - `POST /auth/forgot-password { email }` → sends OTP
+   - `POST /auth/otp-verify { email, otp, purpose: 'reset-password' }` → returns `resetToken`
    - `POST /auth/reset-password { token, password }` → sets new password
 5. **OTP verify purpose** — reset-password requests get a 10-minute reset token, not a login JWT.
 6. **OTP page** — passes correct purpose, reads role from `result.user.role`.
 7. **AuthContext** — reads `res.data.data` for `getMe`.
-8. **Seed script** — admin login works out of the box (`1000000000` / `Admin@123`, override via env).
+8. **Admin login** — `/admin/login` calls `POST /api/v1/admin/auth/login`; only server-configured `ADMIN_EMAIL` and `ADMIN_PASSWORD` are accepted. No admin seed account or signup path is used.
 9. **Phone normalization** — accepts `+919876543210`, `98765 43210`, and bare 10-digit numbers.
 
 ---
@@ -120,8 +124,15 @@ No HTTP 400/401/403/404/409/500 errors on valid requests.
 |-------|----------|-------|
 | OTP is logged to console instead of sent via SMS | INFO | Intended — SMS gateway marked as TODO in code. |
 | Duplicate Mongoose index warnings | INFO | `index: true` alongside `schema.index()` in User/Provider/Category/Booking models. Non-breaking; cleanup recommended. |
-| JWT logout is client-side only | INFO | No server-side token revocation. Acceptable for this app's architecture; tokens expire per `JWT_EXPIRES_IN`. |
+| Admin logout | INFO | Admin JWTs expire after one hour and are explicitly revoked in the server session collection on logout. |
 | `auth-test.js` is a development artifact | INFO | Can be removed in production; kept as a regression suite. |
 | Rate limiter counters reset on server restart | INFO | In-memory store; acceptable for dev. |
 
-**Conclusion:** The authentication system is now fully functional end-to-end. All 32 automated tests pass with correct HTTP status codes, meaningful error messages, proper role handling (customer/provider/admin), JWT generation, route protection, and the complete forgot/reset password flow.
+## 7. Current Admin Authentication and Security Notes
+
+- Admin routes use a separate one-hour JWT audience/token type and a MongoDB-backed session that is revoked on logout. Regular customer/provider JWTs are rejected by admin APIs, and admin JWTs are rejected by regular auth middleware.
+- Admin password recovery is not implemented: the admin password is server-environment-managed. `/admin/forgot-password` directs the operator to update the server environment rather than sending an insecure reset code.
+- The legacy default admin password and an admin-login token artifact were present in tracked Git content. The working tree removes the default login paths and token artifact, but this does not erase earlier Git history. Rotate the deployed `ADMIN_PASSWORD` and `JWT_SECRET`, and purge sensitive historical artifacts from repository history.
+- The local `server/.env` is ignored by Git. Its current `ADMIN_EMAIL` was preserved at the operator's request; it currently has two `ADMIN_PASSWORD` entries. Reconcile the desired runtime values before validating a real admin login.
+
+**Conclusion:** Customer/provider authentication remains separate. Admin access now uses server-only configured credentials, isolated routes and session checks, protected admin APIs, and explicit logout revocation.

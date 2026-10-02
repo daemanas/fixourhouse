@@ -1,13 +1,16 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDown, MapPin, Menu, Search } from 'lucide-react';
+import { ChevronDown, LockKeyhole, MapPin, Menu, Search } from 'lucide-react';
 import Avatar from '../ui/Avatar';
 import { useAuth } from '../../context/AuthContext';
+import { useAdminAuth } from '../../context/AdminAuthContext';
 import NotificationMenu from './NotificationMenu';
 
 export function Topbar({ title, subtitle, onMenuClick, showSearch = false, compact = false, customerDashboard = false, hideMenuButton = false }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthenticated } = useAuth();
+  const { admin } = useAdminAuth();
+  const isAdminRoute = location.pathname === '/admin' || location.pathname.startsWith('/admin/');
   const locationData = user?.locationData || {};
   const savedCity = [locationData.city, locationData.state].filter(Boolean).join(', ') || user?.location || 'Add your location';
   const savedArea = [locationData.area || locationData.address, locationData.district]
@@ -52,8 +55,13 @@ export function Topbar({ title, subtitle, onMenuClick, showSearch = false, compa
               />
             </div>
           )}
-          <NotificationMenu />
-          {!isAuthenticated ? (
+          {!isAdminRoute && <NotificationMenu />}
+          {isAdminRoute ? (
+            <div className="hidden items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200 sm:flex">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-800"><LockKeyhole className="h-4 w-4" aria-hidden="true" /></span>
+              <span>{admin?.email || 'Administrator'}</span>
+            </div>
+          ) : !isAuthenticated ? (
             <div className="flex items-center gap-2">
               <Link to="/auth/login" state={{ from: location }} className="rounded-lg px-2 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-300 dark:hover:bg-emerald-950/40">
                 Login

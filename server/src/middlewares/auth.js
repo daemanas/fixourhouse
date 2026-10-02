@@ -17,6 +17,9 @@ export const protect = asyncHandler(async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, env.jwtSecret);
+    if (decoded.role === 'admin' || decoded.tokenUse === 'admin') {
+      throw new ApiError(403, 'Admin sessions cannot access customer or provider APIs');
+    }
     const user = await User.findById(decoded.id).select('-password');
 
     if (!user) {

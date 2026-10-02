@@ -14,9 +14,11 @@ import {
   X,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useAdminAuth } from '../../context/AdminAuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import Avatar from '../ui/Avatar';
 import BrandLockup from './BrandLockup';
@@ -49,10 +51,13 @@ const providerNavigationGroups = [
 
 export function Sidebar({ items, isOpen, onClose, desktopOnly = false }) {
   const { user, logout } = useAuth();
+  const { admin, logout: logoutAdmin } = useAdminAuth();
   const { unreadCount } = useNotifications();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const isAdminRoute = location.pathname === '/admin' || location.pathname.startsWith('/admin/');
+  const sidebarUser = isAdminRoute ? admin : user;
   const [openGroups, setOpenGroups] = useState({});
   const [collapsed, setCollapsed] = useState(false);
   const [providerProfile, setProviderProfile] = useState(null);
@@ -87,13 +92,23 @@ export function Sidebar({ items, isOpen, onClose, desktopOnly = false }) {
     return () => window.removeEventListener('focus', refreshProviderSidebar);
   }, [isProvider, location.pathname, refreshProviderSidebar]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (isAdminRoute) {
+      try {
+        await logoutAdmin();
+      } catch (error) {
+        toast.error(error.response?.data?.message || 'Your local session was cleared; the server session expires automatically.');
+      } finally {
+        navigate('/admin/login', { replace: true });
+      }
+      return;
+    }
     logout();
     navigate('/');
   };
 
   const getRoleLabel = () => {
-    if (user?.role === 'admin') return 'Administrator';
+    if (isAdminRoute || user?.role === 'admin') return 'Administrator';
     if (user?.role === 'provider') return 'Service Provider';
     return 'Customer';
   };
@@ -177,11 +192,11 @@ export function Sidebar({ items, isOpen, onClose, desktopOnly = false }) {
               </div>
             </div>
           </div>
-        ) : user ? (
+        ) : sidebarUser ? (
           <div className="shrink-0 border-b border-border-light px-6 py-4 dark:border-border-dark">
             <div className="flex items-center gap-3">
-              <Avatar src={user?.avatar} name={user?.name || 'User'} size="md" />
-              <div className="min-w-0"><p className="truncate text-sm font-semibold text-ink-light dark:text-ink-dark">{user?.name || 'User'}</p><p className="text-xs text-gray-500 dark:text-gray-400">{getRoleLabel()}</p></div>
+              <Avatar src={sidebarUser?.avatar} name={sidebarUser?.name || sidebarUser?.email || 'Admin'} size="md" />
+              <div className="min-w-0"><p className="truncate text-sm font-semibold text-ink-light dark:text-ink-dark">{sidebarUser?.name || sidebarUser?.email || 'Admin'}</p><p className="text-xs text-gray-500 dark:text-gray-400">{getRoleLabel()}</p></div>
             </div>
           </div>
         ) : (

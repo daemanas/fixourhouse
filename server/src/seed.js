@@ -2,32 +2,12 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import connectDB from './config/db.js';
-import User from './models/User.js';
-import Provider from './models/Provider.js';
 import Category from './models/Category.js';
 
 const seed = async () => {
   try {
     await connectDB();
     console.log('✅ Connected to MongoDB');
-
-    // Seed admin user
-    const adminPhone = process.env.ADMIN_PHONE || '9000000001';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@123';
-
-    const existingAdmin = await User.findOne({ phone: adminPhone });
-    if (existingAdmin) {
-      console.log(`ℹ️  Admin already exists (${adminPhone})`);
-    } else {
-      await User.create({
-        name: 'LocalFix Admin',
-        phone: adminPhone,
-        password: adminPassword,
-        role: 'admin',
-        status: 'active',
-      });
-      console.log(`✅ Admin created: ${adminPhone} / ${adminPassword}`);
-    }
 
     // Seed sample category
     const generalCat = await Category.findOne({ name: 'General' });

@@ -25,7 +25,7 @@ const smtp = {
 };
 
 const isProd = process.env.NODE_ENV === 'production';
-const requiredInProd = ['MONGODB_URI', 'JWT_SECRET', 'CLIENT_URL'];
+const requiredInProd = ['MONGODB_URI', 'JWT_SECRET', 'CLIENT_URL', 'ADMIN_EMAIL', 'ADMIN_PASSWORD'];
 
 if (isProd) {
   const missing = requiredInProd.filter((key) => !process.env[key]);
