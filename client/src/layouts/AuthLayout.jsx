@@ -51,33 +51,41 @@ export function AuthLayout() {
   const location = useLocation();
   const { settings } = useWebsiteSettings();
   const heroImage = settings?.hero?.desktopImageUrl || settings?.hero?.mobileImageUrl;
+  const fullWidthAuthFlow = [
+    '/auth/otp',
+    '/auth/forgot-password',
+    '/auth/reset-password',
+  ].includes(location.pathname);
   const content = pageContent[location.pathname] || {
     title: <>Local services, <span className="text-emerald-700">made easy.</span></>,
     description: 'A better way to find and manage trusted local professionals.',
   };
 
   return (
-    <div className="min-h-screen overflow-hidden bg-[#f8fcfa] text-slate-900 dark:bg-slate-950 dark:text-white">
+    <div className={`min-h-screen overflow-hidden text-slate-900 ${fullWidthAuthFlow ? 'bg-[#f8fcfa]' : 'bg-[#f8fcfa] dark:bg-slate-950 dark:text-white'}`}>
       <header className="relative z-10 mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-4 sm:px-8 lg:px-12">
-        <Link to="/" aria-label="Back to LocalFix home" className="flex h-10 w-10 items-center justify-center rounded-full text-slate-700 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-slate-200 dark:hover:bg-slate-800">
+        <Link to="/" aria-label="Back to LocalFix home" className={`flex h-10 w-10 items-center justify-center rounded-full text-slate-700 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 ${fullWidthAuthFlow ? '' : 'dark:text-slate-200 dark:hover:bg-slate-800'}`}>
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <Link to="/" className="flex flex-col items-center">
-          <span className="flex items-center gap-1.5 text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+          <span className={`flex items-center gap-1.5 text-xl font-extrabold tracking-tight text-slate-900 ${fullWidthAuthFlow ? '' : 'dark:text-white'}`}>
             <MapPin className="h-7 w-7 fill-emerald-700 text-emerald-700" />
             <span>Local<span className="text-emerald-700 dark:text-emerald-400">Fix</span></span>
           </span>
-          <span className="mt-0.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">Local Services, Made Easy</span>
+          <span className={`mt-0.5 text-[11px] font-medium text-slate-500 ${fullWidthAuthFlow ? '' : 'dark:text-slate-400'}`}>Local Services, Made Easy</span>
         </Link>
         <span className="w-10" aria-hidden="true" />
       </header>
 
-      <main className="mx-auto grid w-full max-w-7xl items-center gap-2 px-4 pb-10 sm:px-8 lg:min-h-[calc(100vh-4.5rem)] lg:grid-cols-[1fr_0.92fr] lg:gap-12 lg:px-12 lg:pb-16">
-        <section className="mx-auto w-full max-w-xl lg:py-8">
+      <main className={fullWidthAuthFlow
+        ? 'w-full'
+        : 'mx-auto grid w-full max-w-7xl items-center gap-2 px-4 pb-10 sm:px-8 lg:min-h-[calc(100vh-4.5rem)] lg:grid-cols-[1fr_0.92fr] lg:gap-12 lg:px-12 lg:pb-16'}
+      >
+        {!fullWidthAuthFlow && <section className="mx-auto w-full max-w-xl lg:py-8">
           <div className="mx-auto max-w-lg lg:mx-0">
-            <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 shadow-sm dark:border-emerald-900 dark:bg-slate-900 dark:text-emerald-300">
+            {/* <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 shadow-sm dark:border-emerald-900 dark:bg-slate-900 dark:text-emerald-300">
               <ShieldCheck className="h-4 w-4" /> Trusted professionals, close to home
-            </p>
+            </p> */}
             <h1 className="text-center text-3xl font-extrabold leading-tight tracking-tight text-slate-950 dark:text-white sm:text-4xl lg:text-left lg:text-5xl">
               {content.title}
             </h1>
@@ -100,15 +108,17 @@ export function AuthLayout() {
               ))}
             </div>
           </div>
-        </section>
+        </section>}
 
-        <section className="mx-auto w-full max-w-xl lg:max-w-lg">
-          <div className="rounded-[1.75rem] border border-emerald-50 bg-white p-5 shadow-[0_24px_70px_-35px_rgba(4,120,87,0.3)] dark:border-slate-800 dark:bg-slate-900 sm:p-8">
-            <Outlet />
-          </div>
-          <p className="mt-5 text-center text-xs text-slate-500 dark:text-slate-400">
+        <section className={fullWidthAuthFlow ? 'w-full' : 'mx-auto w-full max-w-xl lg:max-w-lg'}>
+          {fullWidthAuthFlow ? <Outlet /> : (
+            <div className="rounded-[1.75rem] border border-emerald-50 bg-white p-5 shadow-[0_24px_70px_-35px_rgba(4,120,87,0.3)] dark:border-slate-800 dark:bg-slate-900 sm:p-8">
+              <Outlet />
+            </div>
+          )}
+          {!fullWidthAuthFlow && <p className="mt-5 text-center text-xs text-slate-500 dark:text-slate-400">
             By continuing, you agree to LocalFix's <Link to="/terms" className="font-semibold text-emerald-700 hover:underline dark:text-emerald-300">Terms</Link> and <Link to="/privacy" className="font-semibold text-emerald-700 hover:underline dark:text-emerald-300">Privacy Policy</Link>.
-          </p>
+          </p>}
         </section>
       </main>
     </div>

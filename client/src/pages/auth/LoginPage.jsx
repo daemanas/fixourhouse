@@ -13,7 +13,7 @@ export function LoginPage() {
   const { googleLogin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(location.state?.email || '');
   const [submitting, setSubmitting] = useState(false);
 
   const redirectAfterLogin = (role) => {

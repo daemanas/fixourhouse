@@ -108,13 +108,21 @@ export const otpValidator = Joi.object({
 
 export const forgotPasswordValidator = Joi.object({
   body: Joi.object({
-    phone: phoneSchema,
+    email: emailSchema.required().messages({ 'any.required': 'Email address is required' }),
   }),
 });
 
 export const resetPasswordValidator = Joi.object({
   body: Joi.object({
     token: Joi.string().required(),
-    password: Joi.string().min(6).max(50).required(),
+    password: Joi.string()
+      .min(8)
+      .max(50)
+      .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/)
+      .required()
+      .messages({
+        'string.min': 'Password must be at least 8 characters',
+        'string.pattern.base': 'Password must include an uppercase letter, a lowercase letter, and a number',
+      }),
   }),
 });

@@ -179,11 +179,29 @@ export const register = asyncHandler(async (req, res) => {
 export const verifyOtp = asyncHandler(async (req, res) => {
   const { phone, email, otp, purpose = 'registration' } = req.body;
 
-  if (purpose === 'registration' || purpose === 'login') {
+  if (
+    purpose === 'registration'
+    || purpose === 'login'
+    || (purpose === 'reset-password' && email)
+  ) {
     const channel = email ? 'email' : 'phone';
     const identifier = channel === 'email' ? email.trim().toLowerCase() : phone;
     const challenge = await verifyOtpChallenge({ identifier, channel, purpose, otp });
     let user;
+    if (purpose === 'reset-password') {
+      user = await User.findOne({ email: identifier });
+      if (!user) throw new ApiError(404, 'User not found', [], 'USER_NOT_FOUND');
+      if (user.status === 'blocked' || user.status === 'suspended') {
+        throw new ApiError(403, 'This account cannot reset its password. Please contact support.');
+      }
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+      user.resetPasswordExpires = Date.now() + 10 * 60 * 1000;
+      await user.save();
+      return res.status(200).json(
+        new ApiResponse(200, { resetToken }, 'OTP verified. Please set a new password.'),
+      );
+    }
     if (purpose === 'registration') {
       const pending = challenge.pendingRegistration;
       if (!pending) throw new ApiError(400, 'Registration session expired. Please register again.', [], 'OTP_EXPIRED');
@@ -308,7 +326,7 @@ export const verifyOtp = asyncHandler(async (req, res) => {
 
 export const resendOtp = asyncHandler(async (req, res) => {
   const { phone, email, purpose = 'registration' } = req.body;
-  if (purpose === 'reset-password') {
+  if (purpose === 'reset-password' && phone) {
     const user = await User.findOne({ phone });
     if (!user) throw new ApiError(404, 'User not found');
     if (user.otp?.purpose === 'reset-password' && user.otp.resendAvailableAt > new Date()) {
@@ -343,7 +361,14 @@ export const resendOtp = asyncHandler(async (req, res) => {
   if (purpose === 'login') {
     const user = await User.findOne(channel === 'email' ? { email: identifier } : { phone: identifier });
     if (!user) throw new ApiError(404, 'User not found', [], 'USER_NOT_FOUND');
-  } else if (channel === 'email' && existing.pendingRegistration?.email?.trim().toLowerCase() !== identifier) {
+  } else if (purpose === 'reset-password') {
+    const user = await User.findOne({ email: identifier });
+    if (!user) throw new ApiError(404, 'User not found', [], 'USER_NOT_FOUND');
+    if (user.status === 'blocked' || user.status === 'suspended') {
+      throw new ApiError(403, 'This account cannot reset its password. Please contact support.');
+    }
+  } else if (purpose === 'registration' && channel === 'email'
+    && existing.pendingRegistration?.email?.trim().toLowerCase() !== identifier) {
     throw new ApiError(400, 'Verification session expired. Please start again.', [], 'OTP_EXPIRED');
   }
 
@@ -410,40 +435,25 @@ export const login = asyncHandler(async (req, res) => {
 });
 
 export const forgotPassword = asyncHandler(async (req, res) => {
-  const { phone } = req.body;
-
-  const user = await User.findOne({ phone });
+  const email = req.body.email.trim().toLowerCase();
+  const user = await User.findOne({ email });
   if (!user) {
-    throw new ApiError(404, 'User not found', [], 'USER_NOT_FOUND');
+    throw new ApiError(404, 'No LocalFix account exists with this email address.', [], 'USER_NOT_FOUND');
   }
 
   if (user.status === 'blocked' || user.status === 'suspended') {
     throw new ApiError(403, 'This account cannot reset its password. Please contact support.');
   }
 
-  if (user.otp?.purpose === 'reset-password' && user.otp.resendAvailableAt > new Date()) {
-    throw new ApiError(429, 'Please wait before requesting another verification code.');
-  }
-  const otp = generateOtp();
-  const previousOtp = user.otp;
-  user.otp = {
-    code: hashOtp(otp),
+  await createOtpChallenge({
+    identifier: email,
+    channel: 'email',
     purpose: 'reset-password',
-    expiresAt: new Date(Date.now() + env.otpExpiresIn * 1000),
-    attempts: 0,
-    resendAvailableAt: new Date(Date.now() + 30_000),
-  };
-  await user.save();
-  try {
-    await sendOtpSms(user.phone, otp);
-  } catch (error) {
-    user.otp = previousOtp;
-    await user.save();
-    throw error;
-  }
+    deliver: (otp) => emailService.sendOtpEmail(email, otp),
+  });
 
   res.status(200).json(
-    new ApiResponse(200, { otpSent: true }, 'OTP sent to your phone for password reset')
+    new ApiResponse(200, { otpSent: true, channel: 'email' }, 'Verification code sent to your email.')
   );
 });
 

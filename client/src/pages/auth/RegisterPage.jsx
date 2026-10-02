@@ -38,7 +38,7 @@ export function RegisterPage() {
     getValues,
     setValue,
     formState: { errors },
-  } = useForm();
+  } = useForm({ defaultValues: { email: location.state?.email || '' } });
 
   useEffect(() => {
     const googleRegistration = location.state?.googleRegistration;

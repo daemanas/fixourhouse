@@ -8,7 +8,15 @@ import User from '../models/User.js';
 import env from '../config/env.js';
 import { emailService } from '../services/emailService.js';
 import { createOtpChallenge, verifyOtpChallenge, OTP_MAX_ATTEMPTS } from '../services/otpService.js';
-import { googleAuth, register, requestLoginOtp, resendOtp, verifyOtp } from './authController.js';
+import {
+  forgotPassword,
+  googleAuth,
+  register,
+  requestLoginOtp,
+  resetPassword,
+  resendOtp,
+  verifyOtp,
+} from './authController.js';
 import { generateOtp, hashOtp, isOtpExpired, verifyOtpCode } from '../utils/otp.js';
 import { sendOtpSms } from '../utils/sendOtpSms.js';
 
@@ -322,6 +330,67 @@ test('email OTP resend normalizes and delivers to the pending registration email
 
   assert.equal(deliveredTo, 'person@example.test');
   assert.equal(result.status, 200);
+  assert.equal(result.payload.data.channel, 'email');
+  assert.match(result.payload.message, /resent to your email/i);
+});
+
+test('forgot-password email OTP verifies and issues a single-use reset token', async (t) => {
+  const challenges = installMemoryChallenges(t);
+  const user = makeUser({ email: 'reset@example.test' });
+  t.mock.method(User, 'findOne', async () => user);
+  let deliveredCode;
+  t.mock.method(emailService, 'sendOtpEmail', async (email, otp) => {
+    assert.equal(email, 'reset@example.test');
+    deliveredCode = otp;
+  });
+
+  const requested = await dispatch(forgotPassword, { email: ' RESET@Example.Test ' });
+  assert.equal(requested.status, 200);
+  assert.equal(requested.payload.data.channel, 'email');
+  assert.equal(JSON.stringify(requested.payload).includes(deliveredCode), false);
+  assert.equal(challenges.has('reset@example.test:email:reset-password'), true);
+
+  const verified = await dispatch(verifyOtp, {
+    email: 'RESET@example.test',
+    otp: deliveredCode,
+    purpose: 'reset-password',
+  });
+  assert.equal(verified.status, 200);
+  assert.match(verified.payload.data.resetToken, /^[\da-f]{64}$/);
+  assert.equal(user.resetPasswordExpires > Date.now(), true);
+  assert.equal(challenges.has('reset@example.test:email:reset-password'), false);
+
+  const reset = await dispatch(resetPassword, {
+    token: verified.payload.data.resetToken,
+    password: 'StrongPass123',
+  });
+  assert.equal(reset.status, 200);
+  assert.equal(user.password, 'StrongPass123');
+  assert.equal(user.resetPasswordToken, undefined);
+  assert.equal(user.resetPasswordExpires, undefined);
+});
+
+test('forgot-password OTP resend normalizes email and delivers a new email code', async (t) => {
+  const challenges = installMemoryChallenges(t);
+  await createOtpChallenge({
+    identifier: 'reset@example.test',
+    channel: 'email',
+    purpose: 'reset-password',
+    deliver: async () => {},
+  });
+  const challenge = challenges.values().next().value;
+  challenge.resendAvailableAt = new Date(Date.now() - 1);
+  t.mock.method(User, 'findOne', async () => makeUser({ email: 'reset@example.test' }));
+  let deliveredTo;
+  t.mock.method(emailService, 'sendOtpEmail', async (email) => { deliveredTo = email; });
+
+  const result = await dispatch(resendOtp, {
+    email: ' RESET@Example.Test ',
+    purpose: 'reset-password',
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(deliveredTo, 'reset@example.test');
   assert.equal(result.payload.data.channel, 'email');
   assert.match(result.payload.message, /resent to your email/i);
 });
@@ -667,4 +736,15 @@ test('email registration validator rejects invalid email and missing selected ch
     },
   });
   assert.ok(missingEmail.error);
+});
+
+test('password recovery requires email and a strong new password', async () => {
+  const { forgotPasswordValidator, resetPasswordValidator } = await import('../validators/authValidator.js');
+  assert.equal(forgotPasswordValidator.validate({ body: { email: ' USER@example.com ' } }).error, undefined);
+  assert.ok(forgotPasswordValidator.validate({ body: { phone: '9876543210' } }).error);
+  assert.equal(
+    resetPasswordValidator.validate({ body: { token: 'reset-token', password: 'Strong123' } }).error,
+    undefined,
+  );
+  assert.ok(resetPasswordValidator.validate({ body: { token: 'reset-token', password: 'weakpass' } }).error);
 });

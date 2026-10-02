@@ -94,7 +94,7 @@ export async function sendOtpEmail(email, otp) {
     const info = await getTransporter(config).sendMail({
       from: config.from,
       to: email,
-      subject: `${otp} - LocalFix Verification Code`,
+      subject: 'LocalFix Email Verification Code',
       text: `Hello,\n\nYour LocalFix verification code is: ${otp}\n\nThis code will expire in 5 minutes.\n\nIf you did not request this verification code, you can safely ignore this email.\n\nRegards,\nLocalFix Team`,
       html: `
 <!DOCTYPE html>

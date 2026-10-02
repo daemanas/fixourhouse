@@ -4,7 +4,7 @@ const authOtpSchema = new mongoose.Schema(
   {
     identifier: { type: String, required: true },
     channel: { type: String, enum: ['phone', 'email'], required: true },
-    purpose: { type: String, enum: ['registration', 'login'], required: true },
+    purpose: { type: String, enum: ['registration', 'login', 'reset-password'], required: true },
     code: { type: String, required: true, select: false },
     expiresAt: { type: Date, required: true },
     deleteAt: { type: Date, required: true },

@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
-import { Lock, Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react';
+import { Lock, Eye, EyeOff, Loader2, CheckCircle2, ArrowRight } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Card from '../../components/ui/Card';
@@ -25,6 +25,12 @@ export function ResetPasswordPage() {
   } = useForm();
 
   const password = watch('password', '');
+  const passwordRequirements = [
+    ['At least 8 characters', password.length >= 8],
+    ['One uppercase letter', /[A-Z]/.test(password)],
+    ['One lowercase letter', /[a-z]/.test(password)],
+    ['One number', /\d/.test(password)],
+  ];
 
   const onSubmit = async (data) => {
     if (!token) {
@@ -56,12 +62,12 @@ export function ResetPasswordPage() {
             <div className="h-16 w-16 mx-auto rounded-full bg-success-100 dark:bg-success-900/30 flex items-center justify-center mb-4">
               <CheckCircle2 className="h-8 w-8 text-success-600 dark:text-success-400" />
             </div>
-            <h2 className="text-xl font-bold text-ink-light dark:text-ink-dark">Password Reset Complete</h2>
+            <h2 className="text-xl font-bold text-ink-light dark:text-ink-dark">Password Reset Successful</h2>
             <p className="mt-2 text-gray-500 dark:text-gray-400">
-              Your password has been successfully reset. You can now sign in with your new password.
+              Your password has been updated successfully.
             </p>
             <Button className="mt-6" fullWidth size="lg" onClick={() => navigate('/auth/login')}>
-              Go to Login
+              Back to Login
             </Button>
           </Card>
         </motion.div>
@@ -81,8 +87,8 @@ export function ResetPasswordPage() {
           <div className="h-16 w-16 mx-auto rounded-2xl bg-gradient-to-br from-primary-500 to-secondary-600 flex items-center justify-center mb-6">
             <Lock className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-ink-light dark:text-ink-dark">Reset Password</h1>
-          <p className="mt-2 text-gray-500 dark:text-gray-400">Create a new password for your account</p>
+          <h1 className="text-2xl font-bold text-ink-light dark:text-ink-dark">Create New Password</h1>
+          <p className="mt-2 text-gray-500 dark:text-gray-400">Create a strong new password for your LocalFix account.</p>
         </div>
 
         <Card className="p-8">
@@ -99,7 +105,11 @@ export function ResetPasswordPage() {
                   className="pl-10 pr-10"
                   {...register('password', {
                     required: 'Password is required',
-                    minLength: { value: 6, message: 'Password must be at least 6 characters' },
+                    minLength: { value: 8, message: 'Password must be at least 8 characters' },
+                    pattern: {
+                      value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/,
+                      message: 'Include an uppercase letter, a lowercase letter, and a number',
+                    },
                   })}
                 />
                 <button
@@ -115,6 +125,15 @@ export function ResetPasswordPage() {
                 <p className="mt-1 text-sm text-danger-600 dark:text-danger-400">{errors.password.message}</p>
               )}
             </div>
+
+            <ul className="grid gap-2 rounded-xl bg-emerald-50/70 p-4 text-sm sm:grid-cols-2">
+              {passwordRequirements.map(([label, met]) => (
+                <li key={label} className={`flex items-center gap-2 ${met ? 'text-emerald-700' : 'text-slate-500'}`}>
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  {label}
+                </li>
+              ))}
+            </ul>
 
             <div>
               <label className="block text-sm font-medium text-ink-light dark:text-ink-dark mb-2">
@@ -152,7 +171,7 @@ export function ResetPasswordPage() {
                   Resetting...
                 </>
               ) : (
-                'Reset Password'
+                <>Reset Password <ArrowRight className="ml-1 h-4 w-4" /></>
               )}
             </Button>
           </form>
