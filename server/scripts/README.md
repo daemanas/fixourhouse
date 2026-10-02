@@ -39,18 +39,23 @@ be referenced by customer/provider profiles.
 
 ## Import on Render
 
-1. Confirm the API service's `MONGODB_URI` points to the intended production
-   cluster and database. The path portion of a URI such as
-   `mongodb+srv://<credentials>@<host>/localfix?...` selects `localfix`.
-2. Add `LOCATION_IMPORT_EXPECTED_DB` to the Render service environment with
-   exactly that database name. This is an explicit safety check, not a secret.
-3. Open the service's Shell. From the repository root, inspect the connection:
+1. In the Render API service environment, set `NODE_ENV=production` so the
+   health endpoint and startup log report production mode. Render supplies
+   `PORT`; the server reads it and binds to `0.0.0.0`. Do not replace it with a
+   hardcoded port.
+2. Confirm `MONGODB_URI` points to the intended production cluster and
+   `fixourhouse` database. The deployed connection log currently reports
+   `...mongodb.net/fixourhouse`.
+3. Set `LOCATION_IMPORT_EXPECTED_DB=fixourhouse`. This is an explicit database
+   safety check, not a secret. Keep the existing `MONGODB_URI`; do not copy a
+   local development URI into Render.
+4. Open the service's Shell. From the repository root, inspect the connection:
 
    ```sh
    npm --prefix server run import:locations -- --check
    ```
 
-4. If the displayed host/database are correct, run the import:
+5. If the displayed host/database are correct, run the import:
 
    ```sh
    npm --prefix server run import:locations
@@ -71,8 +76,11 @@ GET /api/v1/locations/countries
 GET /api/v1/locations/states/:countryId
 GET /api/v1/locations/districts/:stateId
 GET /api/v1/locations/cities/:districtId
+GET /api/v1/services
 ```
 
 Use each response's `_id` for the next request. Responses retain the existing
 `ApiResponse` structure and `countries`, `states`, `districts`, or `cities`
-data key.
+data key. `/services` only includes active services belonging to providers
+whose `verificationStatus` is `approved` or `verified`; an empty catalog means
+there are no matching public services in the connected database.

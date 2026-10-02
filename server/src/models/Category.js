@@ -38,7 +38,6 @@ const categorySchema = new mongoose.Schema(
 );
 
 categorySchema.index({ serviceTypeId: 1 });
-categorySchema.index({ slug: 1 });
 categorySchema.index({ isActive: 1 });
 
 const Category = mongoose.model('Category', categorySchema);

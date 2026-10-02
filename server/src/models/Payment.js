@@ -61,7 +61,6 @@ const paymentSchema = new mongoose.Schema(
 );
 
 // Indexes
-paymentSchema.index({ bookingId: 1 });
 paymentSchema.index({ customerId: 1 });
 paymentSchema.index({ providerId: 1 });
 paymentSchema.index({ status: 1 });

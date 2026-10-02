@@ -42,7 +42,6 @@ const serviceTypeSchema = new mongoose.Schema(
   }
 );
 
-serviceTypeSchema.index({ slug: 1 });
 serviceTypeSchema.index({ isActive: 1 });
 
 const ServiceType = mongoose.model('ServiceType', serviceTypeSchema);

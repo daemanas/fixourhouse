@@ -267,7 +267,6 @@ const providerSchema = new mongoose.Schema(
 );
 
 // Indexes
-providerSchema.index({ userId: 1 });
 providerSchema.index({ category: 1 });
 providerSchema.index({ 'location.city': 1 });
 providerSchema.index({ serviceArea: 1 });

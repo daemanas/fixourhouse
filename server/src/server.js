@@ -9,7 +9,7 @@ const startServer = async () => {
     console.log('✅ MongoDB connected successfully');
     await verifySmtpConnection();
 
-    const server = app.listen(env.port, () => {
+    const server = app.listen(env.port, '0.0.0.0', () => {
       console.log(`🚀 LocalFix API running in ${env.nodeEnv} mode on port ${env.port}`);
       console.log(`📡 Health check: http://localhost:${env.port}/health`);
     });
