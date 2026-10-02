@@ -1,8 +1,10 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Provider from '../models/Provider.js';
 import AuthOtp from '../models/AuthOtp.js';
+import Location from '../models/Location.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
@@ -23,6 +25,76 @@ const rejectAdminFromUserAuth = () => new ApiError(401, 'Invalid credentials');
 
 const deliverOtp = (channel, identifier, otp) =>
   channel === 'email' ? emailService.sendOtpEmail(identifier, otp) : sendOtpSms(identifier, otp);
+
+const registrationLocationError = () =>
+  new ApiError(400, 'Please select a valid country, state, district, and city.', [], 'LOCATION_INVALID');
+
+const normalizeRegistrationLocationData = async (locationData) => {
+  if (!locationData) return undefined;
+
+  const countryId = locationData.countryId || null;
+  const stateId = locationData.stateId || null;
+  const districtId = locationData.districtId || null;
+  const cityId = locationData.cityId || null;
+
+  if (
+    (stateId && !countryId)
+    || (districtId && !stateId)
+    || (cityId && !districtId)
+  ) {
+    throw registrationLocationError();
+  }
+
+  const findLocation = async (id, type, parentId) => {
+    if (!id) return null;
+    if (!mongoose.Types.ObjectId.isValid(id)) throw registrationLocationError();
+    const filter = { _id: id, type, isActive: true };
+    if (parentId) filter.parentId = parentId;
+    const location = await Location.findOne(filter).select('_id name');
+    if (!location) throw registrationLocationError();
+    return location;
+  };
+
+  const country = await findLocation(countryId, 'country');
+  const state = await findLocation(stateId, 'state', country?._id);
+  const district = await findLocation(districtId, 'district', state?._id);
+  const city = await findLocation(cityId, 'city', district?._id);
+
+  return {
+    country: country?.name || locationData.country || 'India',
+    state: state?.name || '',
+    district: district?.name || '',
+    city: city?.name || '',
+    countryId: country?._id || null,
+    stateId: state?._id || null,
+    districtId: district?._id || null,
+    cityId: city?._id || null,
+  };
+};
+
+const logRegistrationOtpFailure = (error, email) => {
+  let message = String(error?.message || 'Unknown registration OTP failure')
+    .replaceAll(email, '[redacted email]')
+    .replace(/\b\d{6}\b/g, '[redacted]');
+  const smtpSecrets = [
+    process.env.SMTP_PASS,
+    process.env.SMTP_USER,
+    process.env.SMTP_FROM,
+    env.smtp.pass,
+    env.smtp.user,
+    env.smtp.from,
+  ].filter(Boolean);
+  for (const secret of smtpSecrets) {
+    message = message.replaceAll(secret, '[redacted]');
+  }
+  const smtpFailure = String(error?.code || '').startsWith('SMTP_');
+  console.error(smtpFailure
+    ? '[auth:email] Registration OTP send failed'
+    : '[auth:email] Registration OTP challenge failed', {
+      code: typeof error?.code === 'string' ? error.code : 'REGISTRATION_OTP_FAILED',
+      message,
+    });
+};
 
 const issueSession = async (user, res, statusCode = 200, message = 'OTP verified successfully') => {
   user.lastLogin = new Date();
@@ -155,6 +227,7 @@ export const register = asyncHandler(async (req, res) => {
   if (email && await User.exists({ email })) throw duplicateEmailError();
 
   const identifier = channel === 'email' ? email : phone;
+  const normalizedLocationData = await normalizeRegistrationLocationData(locationData);
   const pendingRegistration = {
     name,
     phone,
@@ -162,15 +235,20 @@ export const register = asyncHandler(async (req, res) => {
     passwordHash: await bcrypt.hash(password, 10),
     role,
     location: location || '',
-    locationData: locationData || {},
+    locationData: normalizedLocationData || {},
   };
-  await createOtpChallenge({
-    identifier,
-    channel,
-    purpose: 'registration',
-    pendingRegistration,
-    deliver: (otp) => deliverOtp(channel, identifier, otp),
-  });
+  try {
+    await createOtpChallenge({
+      identifier,
+      channel,
+      purpose: 'registration',
+      pendingRegistration,
+      deliver: (otp) => deliverOtp(channel, identifier, otp),
+    });
+  } catch (error) {
+    if (channel === 'email') logRegistrationOtpFailure(error, identifier);
+    throw error;
+  }
 
   res.status(200).json(new ApiResponse(200, {
     otpSent: true,

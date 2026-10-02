@@ -3,17 +3,21 @@ import env from './config/env.js';
 import connectDB from './config/db.js';
 import { verifySmtpConnection } from './services/emailService.js';
 
-const PORT = Number.parseInt(process.env.PORT || '5000', 10);
+const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
   try {
     await connectDB();
     console.log('✅ MongoDB connected successfully');
-    await verifySmtpConnection();
 
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 LocalFix API running in ${env.nodeEnv} mode on port ${PORT}`);
       console.log(`📡 Health check: http://localhost:${PORT}/health`);
+      verifySmtpConnection().catch((error) => {
+        console.error('[auth:email] SMTP startup verification failed unexpectedly', {
+          code: typeof error?.code === 'string' ? error.code : 'SMTP_VERIFY_FAILED',
+        });
+      });
     });
 
     // Graceful shutdown

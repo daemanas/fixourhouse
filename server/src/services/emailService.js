@@ -52,6 +52,9 @@ function getTransporter(smtp) {
       port: smtp.port,
       secure: smtp.secure,
       auth: { user: smtp.user, pass: smtp.pass },
+      connectionTimeout: 10_000,
+      greetingTimeout: 5_000,
+      socketTimeout: 10_000,
     });
     transporterKey = key;
   }

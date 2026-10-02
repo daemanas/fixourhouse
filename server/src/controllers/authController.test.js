@@ -284,6 +284,9 @@ test('configured SMTP sends email and verifies its connection using Nodemailer',
   assert.equal(await verifySmtpConnection(), true);
   assert.equal(verified, true);
   assert.equal(createTransport.mock.calls.length, 1);
+  assert.equal(createTransport.mock.calls[0].arguments[0].connectionTimeout, 10_000);
+  assert.equal(createTransport.mock.calls[0].arguments[0].greetingTimeout, 5_000);
+  assert.equal(createTransport.mock.calls[0].arguments[0].socketTimeout, 10_000);
 });
 
 test('SMTP recipient rejection cannot produce a successful email OTP send', async (t) => {
@@ -512,11 +515,34 @@ test('email registration sends email OTP and creates the user only after success
     channel: 'email',
     password: 'password123',
     role: 'customer',
+    locationData: {
+      country: 'India',
+      state: '',
+      district: '',
+      city: '',
+      countryId: '',
+      stateId: '',
+      districtId: '',
+      cityId: '',
+    },
   });
   assert.equal(result.status, 200);
   assert.equal(result.payload.data.channel, 'email');
   assert.equal(JSON.stringify(result.payload).includes(sentCode), false);
   assert.equal(challenges.size, 1);
+  assert.deepEqual(
+    challenges.values().next().value.pendingRegistration.locationData,
+    {
+      country: 'India',
+      state: '',
+      district: '',
+      city: '',
+      countryId: null,
+      stateId: null,
+      districtId: null,
+      cityId: null,
+    },
+  );
 
   const verified = await dispatch(verifyOtp, {
     email: 'email@example.com',
@@ -532,6 +558,7 @@ test('email registration sends email OTP and creates the user only after success
 
 test('SMTP failure removes pending registration challenge so retry is not blocked', async (t) => {
   const challenges = installMemoryChallenges(t);
+  const log = t.mock.method(console, 'error', () => {});
   let sendAttempts = 0;
   t.mock.method(emailService, 'sendOtpEmail', async () => {
     sendAttempts += 1;
@@ -555,11 +582,34 @@ test('SMTP failure removes pending registration challenge so retry is not blocke
   const failed = await dispatch(register, request);
   assert.equal(failed.error.code, 'SMTP_SEND_FAILED');
   assert.equal(challenges.size, 0);
+  assert.equal(log.mock.calls[0].arguments[0], '[auth:email] Registration OTP send failed');
+  assert.equal(log.mock.calls[0].arguments[1].code, 'SMTP_SEND_FAILED');
+  assert.equal(JSON.stringify(log.mock.calls).includes(request.email), false);
 
   const retried = await dispatch(register, request);
   assert.equal(retried.status, 200);
   assert.equal(challenges.size, 1);
   assert.equal(sendAttempts, 2);
+});
+
+test('email registration rejects invalid selected location ids before creating an OTP challenge', async (t) => {
+  const challenges = installMemoryChallenges(t);
+  t.mock.method(User, 'exists', async () => false);
+  const result = await dispatch(register, {
+    name: 'Location User',
+    email: 'location@example.com',
+    channel: 'email',
+    password: 'password123',
+    role: 'customer',
+    locationData: {
+      country: 'India',
+      countryId: '',
+      stateId: 'not-an-object-id',
+    },
+  });
+
+  assert.equal(result.error.code, 'LOCATION_INVALID');
+  assert.equal(challenges.size, 0);
 });
 
 test('provider registration creates a provider profile only after phone OTP verification', async (t) => {
