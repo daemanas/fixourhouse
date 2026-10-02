@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   getProviders,
+  getNearbyProviders,
   getProviderById,
   createProvider,
   getMyProviderProfile,
@@ -43,6 +44,7 @@ const router = Router();
 
 // Public routes
 router.get('/', getProviders);
+router.get('/nearby', protect, authorize('customer'), getNearbyProviders);
 router.get('/:id', getProviderById);
 
 // Private routes

@@ -3,6 +3,9 @@ import api from './api';
 // Get all approved providers (public)
 export const getProviders = (params = {}) => api.get('/providers', { params });
 
+// Get approved providers serving the authenticated customer's saved district.
+export const getNearbyProviders = () => api.get('/providers/nearby');
+
 // Get single provider by ID (public)
 export const getProviderById = (id) => api.get(`/providers/${id}`);
 

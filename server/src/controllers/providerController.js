@@ -23,6 +23,7 @@ import {
   normalizeAvailability,
   normalizeSlots,
 } from '../utils/availability.js';
+import { providerServesDistrict, toProviderSummary } from '../utils/providerProfile.js';
 
 // Display-name source of truth: the provider's businessName is mirrored into
 // User.name so every identity surface (navbar, sidebar, dashboards) stays in
@@ -125,6 +126,67 @@ export const getProviders = asyncHandler(async (req, res) => {
       },
       'Providers fetched successfully'
     )
+  );
+});
+
+// @desc    Get providers who serve the authenticated customer's saved district
+// @route   GET /api/v1/providers/nearby
+// @access  Private (Customer)
+export const getNearbyProviders = asyncHandler(async (req, res) => {
+  const customer = await User.findById(req.user._id).select('locationData').lean();
+  const customerLocation = customer?.locationData || {};
+  const district = String(customerLocation.district || '').trim();
+
+  if (!district) {
+    return res.status(200).json(
+      new ApiResponse(200, { providers: [], locationRequired: true }, 'Set your location to find nearby providers')
+    );
+  }
+
+  const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const districtRegex = new RegExp(`^\\s*${escapeRegex(district)}\\s*$`, 'i');
+  const providers = await Provider.collection.find({
+    verificationStatus: { $in: ['approved', 'verified'] },
+    $or: [
+      {
+        serviceAreas: {
+          $elemMatch: {
+            district: districtRegex,
+            isActive: { $ne: false },
+          },
+        },
+      },
+      {
+        $and: [
+          { $or: [{ serviceAreas: { $exists: false } }, { serviceAreas: { $size: 0 } }] },
+          { 'location.district': districtRegex },
+        ],
+      },
+    ],
+  }, {
+    projection: { documents: 0, earnings: 0, settings: 0 },
+  }).toArray();
+
+  const matchingProviders = providers.filter((provider) =>
+    providerServesDistrict(provider, customerLocation)
+  );
+  const users = await User.find({
+    _id: { $in: matchingProviders.map((provider) => provider.userId) },
+    status: 'active',
+  }).select('name avatar').lean();
+  const usersById = new Map(users.map((user) => [String(user._id), user]));
+
+  const results = matchingProviders
+    .filter((provider) => usersById.has(String(provider.userId)))
+    .map((provider) => toProviderSummary({
+      ...provider,
+      userId: usersById.get(String(provider.userId)),
+    }))
+    .sort((a, b) => b.rating - a.rating || b.totalBookings - a.totalBookings)
+    .slice(0, 8);
+
+  return res.status(200).json(
+    new ApiResponse(200, { providers: results, locationRequired: false }, 'Nearby providers retrieved')
   );
 });
 
@@ -297,6 +359,7 @@ const PROVIDER_PROFILE_FIELDS = [
   'experience',
   'location',
   'serviceArea',
+  'serviceAreas',
   'serviceRadius',
   'availability',
   'pricing',

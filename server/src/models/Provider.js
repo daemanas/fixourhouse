@@ -89,6 +89,24 @@ const settingsSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const serviceAreaSchema = new mongoose.Schema(
+  {
+    country: { type: String, trim: true, default: '' },
+    state: { type: String, trim: true, default: '' },
+    district: { type: String, trim: true, required: true },
+    city: { type: String, trim: true, default: '' },
+    area: { type: String, trim: true, default: '' },
+    pincode: { type: String, trim: true, default: '' },
+    countryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', default: null },
+    stateId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', default: null },
+    districtId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', default: null },
+    cityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', default: null },
+    coversDistrict: { type: Boolean, default: false },
+    isActive: { type: Boolean, default: true },
+  },
+  { _id: false }
+);
+
 const providerSchema = new mongoose.Schema(
   {
     userId: {
@@ -131,6 +149,10 @@ const providerSchema = new mongoose.Schema(
     },
     serviceArea: {
       type: [String],
+      default: [],
+    },
+    serviceAreas: {
+      type: [serviceAreaSchema],
       default: [],
     },
     serviceRadius: {
@@ -249,6 +271,7 @@ providerSchema.index({ userId: 1 });
 providerSchema.index({ category: 1 });
 providerSchema.index({ 'location.city': 1 });
 providerSchema.index({ serviceArea: 1 });
+providerSchema.index({ 'serviceAreas.district': 1 });
 providerSchema.index({ 'location.coordinates': '2dsphere' });
 providerSchema.index({ verificationStatus: 1 });
 providerSchema.index({ rating: -1 });

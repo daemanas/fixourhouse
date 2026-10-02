@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Navigate, Routes, Route, useParams, useSearchParams } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { PublicOnlyRoute } from './routes/PublicOnlyRoute';
@@ -27,7 +27,6 @@ const CustomerServicesPage = lazy(() => import('./pages/customer/CustomerService
 const SearchPage = lazy(() => import('./pages/customer/SearchPage'));
 const ServiceDetailPage = lazy(() => import('./pages/customer/ServiceDetailPage'));
 const ProviderProfilePage = lazy(() => import('./pages/customer/ProviderProfilePage'));
-const BookServicePage = lazy(() => import('./pages/customer/BookServicePage'));
 const BookingsPage = lazy(() => import('./pages/customer/BookingsPage'));
 const CustomerComplaintsPage = lazy(() => import('./pages/customer/CustomerComplaintsPage'));
 const WishlistPage = lazy(() => import('./pages/customer/WishlistPage'));
@@ -85,6 +84,21 @@ function PageLoader() {
   );
 }
 
+function LegacyBookingRedirect() {
+  const { providerId } = useParams();
+  const [searchParams] = useSearchParams();
+  const serviceId = searchParams.get('service');
+
+  if (!serviceId) return <Navigate to="/customer/services" replace />;
+  return (
+    <Navigate
+      to={`/customer/service/${encodeURIComponent(serviceId)}`}
+      replace
+      state={{ providerId }}
+    />
+  );
+}
+
 function App() {
   return (
     <Suspense fallback={<PageLoader />}>
@@ -99,6 +113,7 @@ function App() {
           <Route path="/customer/categories" element={<CustomerServicesPage />} />
           <Route path="/customer/search" element={<SearchPage />} />
           <Route path="/customer/service/:id" element={<ServiceDetailPage />} />
+          <Route path="/customer/book/:providerId" element={<LegacyBookingRedirect />} />
           <Route path="/customer/provider/:id" element={<ProviderProfilePage />} />
           <Route path="/customer/provider/:id/services" element={<ProviderProfilePage />} />
           <Route path="/customer/provider/:id/gallery" element={<ProviderProfilePage />} />
@@ -127,7 +142,6 @@ function App() {
 
         {/* Protected customer routes */}
         <Route element={<ProtectedRoute roles={[env.ROLES.CUSTOMER]} />}>
-          <Route path="/customer/book/:providerId" element={<BookServicePage />} />
           <Route path="/customer/bookings" element={<BookingsPage />} />
           <Route path="/customer/complaints" element={<CustomerComplaintsPage />} />
           <Route path="/customer/wishlist" element={<WishlistPage />} />

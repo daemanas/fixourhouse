@@ -123,6 +123,26 @@ export const createProviderValidator = Joi.object({
   }),
 });
 
+const serviceAreaSchema = Joi.object({
+  country: Joi.string().allow('').optional(),
+  state: Joi.string().allow('').optional(),
+  district: Joi.string().trim().required(),
+  city: Joi.string().allow('').optional(),
+  area: Joi.string().allow('').optional(),
+  pincode: Joi.string().allow('').optional(),
+  countryId: Joi.string().allow('', null).optional(),
+  stateId: Joi.string().allow('', null).optional(),
+  districtId: Joi.string().allow('', null).optional(),
+  cityId: Joi.string().allow('', null).optional(),
+  coversDistrict: Joi.boolean().optional(),
+  isActive: Joi.boolean().optional(),
+}).custom((serviceArea, helpers) => {
+  if (!serviceArea.coversDistrict && !serviceArea.city?.trim()) {
+    return helpers.message('Select a city or enable district-wide coverage');
+  }
+  return serviceArea;
+});
+
 export const updateProviderValidator = Joi.object({
   body: Joi.object({
     businessName: Joi.string().min(2).max(100).optional(),
@@ -148,6 +168,7 @@ export const updateProviderValidator = Joi.object({
     }).optional(),
     experience: Joi.number().min(0).optional(),
     serviceArea: Joi.array().items(Joi.string()).optional(),
+    serviceAreas: Joi.array().items(serviceAreaSchema).optional(),
     serviceRadius: Joi.number().min(0).optional(),
     availability: Joi.alternatives()
       .try(weekAvailabilitySchema, legacyAvailabilitySchema)

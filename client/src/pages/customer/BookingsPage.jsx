@@ -513,14 +513,13 @@ export function BookingsPage() {
             {visibleBookings.map((booking, i) => {
               const providerName = getProviderName(booking);
               const serviceName = getServiceName(booking);
-              const providerId = booking.providerId?._id;
               const serviceId = booking.serviceId?._id || booking.serviceSnapshot?.serviceId;
               const statusTone = booking.status === 'pending' ? 'bg-sky-50 text-sky-800 dark:bg-sky-900/20 dark:text-sky-300'
                 : booking.status === 'accepted' ? 'bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300'
                   : booking.status === 'working' ? 'bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300'
                     : booking.status === 'completed' ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300'
                       : 'bg-rose-50 text-rose-800 dark:bg-rose-900/20 dark:text-rose-300';
-              const canRebook = Boolean(providerId && serviceId);
+              const canRebook = Boolean(serviceId);
 
               return (
                 <motion.div key={booking._id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, delay: Math.min(i * 0.04, 0.2) }}>
@@ -576,11 +575,11 @@ export function BookingsPage() {
                           {(booking.status === 'accepted' || booking.status === 'working') && booking.providerId?.userId?.phone && (
                             <a href={`tel:${booking.providerId.userId.phone}`} className="hidden min-h-9 items-center gap-1.5 rounded-lg bg-emerald-50 px-3 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300 sm:inline-flex"><Phone className="h-3.5 w-3.5" />Contact</a>
                           )}
-                          {booking.status === 'completed' && providerId && serviceId && (
-                            <Link to={`/customer/book/${providerId}?service=${serviceId}`} className="inline-flex min-h-9 items-center rounded-lg border border-emerald-700 px-3 text-xs font-semibold text-emerald-800 dark:border-emerald-500 dark:text-emerald-300">Book Again</Link>
+                          {booking.status === 'completed' && canRebook && (
+                            <Link to={`/customer/service/${serviceId}`} className="inline-flex min-h-9 items-center rounded-lg border border-emerald-700 px-3 text-xs font-semibold text-emerald-800 dark:border-emerald-500 dark:text-emerald-300">Book Again</Link>
                           )}
-                          {booking.status === 'cancelled' && providerId && serviceId && (
-                            <Link to={`/customer/book/${providerId}?service=${serviceId}`} className="inline-flex min-h-9 items-center rounded-lg border border-rose-300 px-3 text-xs font-semibold text-rose-700 dark:border-rose-900 dark:text-rose-300">Rebook</Link>
+                          {booking.status === 'cancelled' && canRebook && (
+                            <Link to={`/customer/service/${serviceId}`} className="inline-flex min-h-9 items-center rounded-lg border border-rose-300 px-3 text-xs font-semibold text-rose-700 dark:border-rose-900 dark:text-rose-300">Rebook</Link>
                           )}
                         </div>
                       </div>

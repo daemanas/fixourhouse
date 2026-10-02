@@ -35,7 +35,7 @@ import { useAuth } from '../../context/AuthContext';
 import { redirectToLogin } from '../../utils/authRedirect';
 import { useWebsiteSettings } from '../../context/WebsiteSettingsContext';
 import { getCategories } from '../../services/categoryService';
-import { getProviders } from '../../services/providerService';
+import { getNearbyProviders } from '../../services/providerService';
 import { getServices } from '../../services/serviceService';
 import { getWishlist, toggleWishlist } from '../../services/userService';
 import { resolveAssetUrl } from '../../utils/assetUrl';
@@ -86,9 +86,13 @@ const categoryHref = (category) => {
     : `/customer/search?q=${encodeURIComponent(category.name || '')}`;
 };
 
-const getProviderLocation = (provider) => {
-  const location = provider.location || {};
-  return [location.area || location.address, location.city, location.state]
+const getProviderLocation = (provider, district) => {
+  const matchingServiceArea = (provider.serviceAreas || []).find((area) =>
+    area.isActive !== false
+    && String(area.district || '').trim().toLowerCase() === String(district || '').trim().toLowerCase()
+  );
+  const location = matchingServiceArea || provider.location || {};
+  return [location.area || location.city, location.district, location.state]
     .filter(Boolean)
     .join(', ');
 };
@@ -158,6 +162,7 @@ export function CustomerDashboard() {
   const { user, isAuthenticated } = useAuth();
   const { settings } = useWebsiteSettings();
   const savedCity = user?.locationData?.city || user?.location || '';
+  const savedDistrict = user?.locationData?.district || '';
   const [searchQuery, setSearchQuery] = useState('');
   const [categories, setCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
@@ -167,6 +172,7 @@ export function CustomerDashboard() {
   const [providers, setProviders] = useState([]);
   const [providersLoading, setProvidersLoading] = useState(true);
   const [providersError, setProvidersError] = useState(false);
+  const [providersLocationRequired, setProvidersLocationRequired] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState(() => new Set());
   const [favoriteSavingIds, setFavoriteSavingIds] = useState(() => new Set());
 
@@ -201,25 +207,28 @@ export function CustomerDashboard() {
   }, [savedCity]);
 
   const loadProviders = useCallback(async () => {
+    if (!isAuthenticated || !savedDistrict.trim()) {
+      setProviders([]);
+      setProvidersError(false);
+      setProvidersLocationRequired(true);
+      setProvidersLoading(false);
+      return;
+    }
+
     setProvidersLoading(true);
     setProvidersError(false);
     try {
-      const params = { page: 1, limit: 8, sort: 'rating' };
-      if (savedCity) params.city = savedCity;
-      let response = await getProviders(params);
-      let results = response.data?.data?.providers || [];
-      if (savedCity && results.length === 0) {
-        response = await getProviders({ page: 1, limit: 8, sort: 'rating' });
-        results = response.data?.data?.providers || [];
-      }
-      setProviders(results);
+      const response = await getNearbyProviders();
+      const result = response.data?.data;
+      setProviders(result?.providers || []);
+      setProvidersLocationRequired(Boolean(result?.locationRequired));
     } catch {
       setProviders([]);
       setProvidersError(true);
     } finally {
       setProvidersLoading(false);
     }
-  }, [savedCity]);
+  }, [isAuthenticated, savedDistrict]);
 
   const loadFavorites = useCallback(async () => {
     if (!isAuthenticated) {
@@ -593,7 +602,7 @@ export function CustomerDashboard() {
 
       {/* NEARBY SERVICE PROVIDERS SECTION */}
       <section aria-labelledby="nearby-service-providers-title">
-        <SectionHeading title="Nearby Service Providers" to="/customer/services" />
+        <SectionHeading title="Nearby Service Providers" to="/customer/services" linkLabel="Explore services" />
         {providersLoading ? (
           <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
             <CardSkeleton count={4} />
@@ -612,13 +621,21 @@ export function CustomerDashboard() {
         ) : providers.length === 0 ? (
           <EmptyState
             icon={MapPin}
-            title="No nearby providers found"
-            description="Explore available services to find a professional."
-            action={
-              <Link to="/customer/services" className="inline-flex min-h-10 items-center rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800">
-                Explore All Services
+            title={providersLocationRequired
+              ? 'Set your location to see nearby providers'
+              : `No providers serving ${savedDistrict}`}
+            description={providersLocationRequired
+              ? 'Add your district to find providers who serve your area.'
+              : `There are currently no providers listed for ${savedDistrict}.`}
+            action={providersLocationRequired ? (
+              <Link to="/customer/profile" className="inline-flex min-h-10 items-center rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800">
+                Update Location
               </Link>
-            }
+            ) : (
+              <Link to="/customer/services" className="inline-flex min-h-10 items-center rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800">
+                Explore Services
+              </Link>
+            )}
           />
         ) : (
           <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
@@ -628,14 +645,14 @@ export function CustomerDashboard() {
               const name = provider.businessName || provider.userId?.name || 'Service professional';
               const rating = Number(provider.rating || 0);
               const reviewCount = Number(provider.reviewCount || 0);
-              const location = getProviderLocation(provider);
+              const location = getProviderLocation(provider, savedDistrict);
               const experience = Number(provider.experience || 0);
               return (
                 <article key={providerId} className="flex h-[280px] w-72 shrink-0 flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-200 hover:shadow-md">
                   <div>
                     <div className="flex items-start justify-between gap-3">
                       <Link to={`/customer/provider/${providerId}`} aria-label={`View ${name}'s profile`} className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2">
-                        <Avatar name={name} size="lg" alt={`${name} profile`} />
+                        <Avatar src={provider.profileImage || provider.avatar || provider.userId?.avatar} name={name} size="lg" alt={`${name} profile`} />
                       </Link>
                       <button
                         type="button"

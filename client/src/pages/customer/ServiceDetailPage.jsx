@@ -152,7 +152,14 @@ export function ServiceDetailPage() {
 
     if (!targetProvider) {
       if (providersOfferingService.length > 0) {
-        targetProvider = buildProviderSelection(providersOfferingService[0]);
+        const serviceProviderId = data?.service?.providerId?._id || data?.service?.providerId;
+        const preferredProviderId = location.state?.providerId || serviceProviderId;
+        const preferredOffer = preferredProviderId
+          ? providersOfferingService.find((offer) =>
+            String(offer.provider?._id || offer.provider) === String(preferredProviderId)
+          )
+          : null;
+        targetProvider = buildProviderSelection(preferredOffer || providersOfferingService[0]);
       } else if (data?.service?.providerId) {
         const p = data.service.providerId;
         const rawP = Number(data.service.startingPrice ?? data.service.price ?? 0);

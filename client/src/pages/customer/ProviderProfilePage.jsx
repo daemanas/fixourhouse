@@ -21,6 +21,7 @@ import { useAuth } from '../../context/AuthContext';
 import { summarizeAvailability, formatTime12h } from '../../utils/availability';
 import resolveAssetUrl from '../../utils/assetUrl';
 import { redirectToLogin } from '../../utils/authRedirect';
+import { getBookingRoute } from '../../utils/bookingRoute';
 
 const formatDate = (date) => date
   ? new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -255,11 +256,8 @@ export function ProviderProfilePage() {
 
   const bookService = (service = selectedService) => {
     if (!service?._id || !provider?._id) return;
-    if (!isAuthenticated) {
-      redirectToLogin(navigate, routeLocation, { bookingServiceId: service._id });
-      return;
-    }
-    navigate(`/customer/book/${provider._id}?service=${service._id}`);
+    const bookingRoute = getBookingRoute(service._id);
+    if (bookingRoute) navigate(bookingRoute, { state: { providerId: provider._id } });
   };
 
   const loadMoreReviews = async () => {
