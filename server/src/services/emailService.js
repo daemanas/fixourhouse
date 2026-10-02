@@ -52,7 +52,7 @@ function getTransporter(smtp) {
       port: smtp.port,
       secure: smtp.secure,
       auth: { user: smtp.user, pass: smtp.pass },
-      connectionTimeout: 10_000,
+      connectionTimeout: 7_000,
       greetingTimeout: 5_000,
       socketTimeout: 10_000,
     });
@@ -227,6 +227,12 @@ export async function sendOtpEmail(email, otp) {
     const classified = classifySmtpFailure(error);
     console.error('[auth:email] Failed to send verification code.', {
       code: classified.code,
+      smtpCode: String(error?.code || error?.cause?.code || 'UNKNOWN'),
+      syscall: error?.syscall || error?.cause?.syscall || null,
+      address: error?.address || error?.cause?.address || null,
+      port: error?.port || error?.cause?.port || config.port,
+      host: config.host,
+      secure: config.secure,
       responseCode: error?.responseCode || null,
       accepted: (error?.accepted || []).map((address) =>
         String(typeof address === 'string' ? address : address?.address || '').trim().toLowerCase()
@@ -250,10 +256,11 @@ export async function verifySmtpConnection() {
   const config = readSmtpConfig();
   console.info('[auth:email] SMTP configuration:', {
     configured: smtpConfigured(config),
-    host: config.host ? 'configured' : 'missing',
-    port: config.portConfigured ? 'configured' : 'missing',
-    secure: config.secureConfigured ? 'configured' : 'missing',
+    host: config.host || 'missing',
+    port: config.portConfigured ? config.port : 'missing',
+    secure: config.secureConfigured ? config.secure : 'missing',
     user: config.user ? 'configured' : 'missing',
+    password: config.pass ? 'configured' : 'missing',
     from: config.from ? 'configured' : 'missing',
   });
   if (!smtpConfigured(config)) {
@@ -269,6 +276,12 @@ export async function verifySmtpConnection() {
     const classified = classifySmtpFailure(error);
     console.error('[auth:email] SMTP connection verification failed.', {
       code: classified.code,
+      smtpCode: String(error?.code || error?.cause?.code || 'UNKNOWN'),
+      syscall: error?.syscall || error?.cause?.syscall || null,
+      address: error?.address || error?.cause?.address || null,
+      port: error?.port || error?.cause?.port || config.port,
+      host: config.host,
+      secure: config.secure,
       responseCode: error?.responseCode || null,
       message: sanitizeSmtpMessage(error?.message),
     });

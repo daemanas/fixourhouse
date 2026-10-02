@@ -284,7 +284,7 @@ test('configured SMTP sends email and verifies its connection using Nodemailer',
   assert.equal(await verifySmtpConnection(), true);
   assert.equal(verified, true);
   assert.equal(createTransport.mock.calls.length, 1);
-  assert.equal(createTransport.mock.calls[0].arguments[0].connectionTimeout, 10_000);
+  assert.equal(createTransport.mock.calls[0].arguments[0].connectionTimeout, 7_000);
   assert.equal(createTransport.mock.calls[0].arguments[0].greetingTimeout, 5_000);
   assert.equal(createTransport.mock.calls[0].arguments[0].socketTimeout, 10_000);
 });
@@ -425,6 +425,9 @@ test('SMTP authentication and connectivity failures have distinct error codes', 
   const connectionError = await sendOtpEmail('person@example.test', '123456')
     .catch((error) => error);
   assert.equal(connectionError.code, 'SMTP_CONNECTION_FAILED');
+  const timeoutLog = JSON.stringify(log.mock.calls);
+  assert.match(timeoutLog, /ETIMEDOUT/);
+  assert.equal(timeoutLog.includes(env.smtpPass), false);
   currentFailure = 'ENOTFOUND';
   configureSmtp('smtp.dns-failed.test');
   const dnsError = await sendOtpEmail('person@example.test', '123456')
