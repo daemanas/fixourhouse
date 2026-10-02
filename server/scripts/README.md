@@ -61,6 +61,11 @@ be referenced by customer/provider profiles.
    npm --prefix server run import:locations
    ```
 
+The current production API logs confirm the database is `fixourhouse`, but the
+live country endpoint is empty. The importer must be run once against that
+production database; it is intentionally not part of server startup. After
+seeding, rerunning the command is safe and upserts the same hierarchy.
+
 The script prints aggregate counts and verifies India (`code: IN`), India
 states, districts, and cities after completion. Keep location import as an
 explicit one-off Render Shell operation; do not put it in the web service's

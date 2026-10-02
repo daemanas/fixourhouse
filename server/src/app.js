@@ -12,6 +12,8 @@ import { UPLOADS_ROOT } from './utils/upload.js';
 
 const app = express();
 
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(
   helmet({
