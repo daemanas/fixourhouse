@@ -37,14 +37,17 @@ const locationSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    autoIndex: false,
   }
 );
 
 locationSchema.index({ type: 1, parentId: 1 });
-locationSchema.index({ name: 1, type: 1, parentId: 1 });
+locationSchema.index(
+  { type: 1, parentId: 1, name: 1 },
+  { unique: true, name: 'uniq_location_type_parent_name' }
+);
 locationSchema.index({ parentId: 1 });
 
 const Location = mongoose.model('Location', locationSchema);
 
 export default Location;
-

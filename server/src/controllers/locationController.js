@@ -26,7 +26,7 @@ export const getCountries = asyncHandler(async (req, res) => {
 // @route  GET /api/v1/locations/states?countryId=<id>
 // @access Public
 export const getStates = asyncHandler(async (req, res) => {
-  const { countryId } = req.query;
+  const countryId = req.params.countryId || req.query.countryId;
   const query = { type: 'state', isActive: true };
   if (countryId) {
     query.parentId = countryId;
@@ -45,7 +45,7 @@ export const getStates = asyncHandler(async (req, res) => {
 // @route  GET /api/v1/locations/districts?stateId=<id>
 // @access Public
 export const getDistricts = asyncHandler(async (req, res) => {
-  const { stateId } = req.query;
+  const stateId = req.params.stateId || req.query.stateId;
   if (!stateId) {
     throw new ApiError(400, 'stateId query parameter is required');
   }
@@ -74,7 +74,8 @@ export const getDistricts = asyncHandler(async (req, res) => {
 //         GET /api/v1/locations/cities?stateId=<id>
 // @access Public
 export const getCities = asyncHandler(async (req, res) => {
-  const { districtId, stateId } = req.query;
+  const districtId = req.params.districtId || req.query.districtId;
+  const stateId = req.params.stateId || req.query.stateId;
 
   if (!districtId && !stateId) {
     throw new ApiError(400, 'Either districtId or stateId query parameter is required');

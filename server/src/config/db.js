@@ -45,7 +45,7 @@ const connectDB = async () => {
       serverSelectionTimeoutMS: 5000,
     });
     await ensureAuthIndexes();
-    console.log(`✅ MongoDB connected: ${conn.connection.host}`);
+    console.log(`✅ MongoDB connected: ${conn.connection.host}/${conn.connection.name}`);
     return conn;
   } catch (error) {
     console.error(`❌ MongoDB connection error: ${error.message}`);

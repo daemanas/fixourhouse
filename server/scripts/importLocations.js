@@ -10,7 +10,11 @@
  * Run:  npm run import:locations   (from /server directory)
  */
 import dotenv from 'dotenv';
-dotenv.config();
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const serverRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+dotenv.config({ path: resolve(serverRoot, '.env') });
 
 import mongoose from 'mongoose';
 import Location from '../src/models/Location.js';
@@ -66,24 +70,66 @@ function buildStateCodeMap() {
 
 
 async function importLocations() {
-  const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/localfix';
+  const checkOnly = process.argv.includes('--check');
+  const mongoUri = process.env.MONGODB_URI;
+  if (!mongoUri) {
+    throw new Error('MONGODB_URI must be set; refusing to import into a default or unknown database.');
+  }
+
   await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 10000 });
-  console.log('[import:locations] Connected to ' + mongoose.connection.host);
+  const actualDatabase = mongoose.connection.name;
+  const expectedDatabase = String(process.env.LOCATION_IMPORT_EXPECTED_DB || '').trim();
+  console.log(`[import:locations] Connected host=${mongoose.connection.host} database=${actualDatabase || '(default)'}`);
+  if (!expectedDatabase) {
+    throw new Error('Set LOCATION_IMPORT_EXPECTED_DB to the intended database name before importing.');
+  }
+  if (!actualDatabase || actualDatabase !== expectedDatabase) {
+    throw new Error(`Database confirmation mismatch: connected to "${actualDatabase || '(default)'}", expected "${expectedDatabase}".`);
+  }
+
+  const existingCounts = await Promise.all([
+    Location.countDocuments({ type: 'country', isActive: true }),
+    Location.countDocuments({ type: 'state', isActive: true }),
+    Location.countDocuments({ type: 'district', isActive: true }),
+    Location.countDocuments({ type: 'city', isActive: true }),
+  ]);
+  console.log(`[import:locations] Existing data: ${existingCounts[0]} countries, ${existingCounts[1]} states, ${existingCounts[2]} districts, ${existingCounts[3]} cities.`);
+  if (checkOnly) {
+    await mongoose.disconnect();
+    return;
+  }
+
+  const duplicateKeys = await Location.collection.aggregate([
+    {
+      $group: {
+        _id: { type: '$type', parentId: '$parentId', name: '$name' },
+        count: { $sum: 1 },
+      },
+    },
+    { $match: { count: { $gt: 1 } } },
+    { $limit: 1 },
+  ]).toArray();
+  if (duplicateKeys.length) {
+    throw new Error('Duplicate location names already exist under the same parent; resolve them before creating the unique index.');
+  }
+  await Location.createIndexes();
 
   const stateCodeMap = buildStateCodeMap();
   const statesWithDistricts = getAllStatesWithDistricts();
+  if (statesWithDistricts.length === 0 || !stateCodeMap.size) {
+    throw new Error('Bundled India state/district source data is empty.');
+  }
 
   // 0. Upsert Country node
   const countryDoc = await Location.findOneAndUpdate(
-    { name: 'India', type: 'country' },
+    { name: 'India', type: 'country', parentId: null },
     {
-      $setOnInsert: {
+      $set: {
         name: 'India',
-        type: 'country',
-        parentId: null,
         code: 'IN',
         isActive: true,
       },
+      $setOnInsert: { type: 'country', parentId: null },
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
@@ -98,14 +144,13 @@ async function importLocations() {
 
     // 1. Upsert State under Country
     const stateDoc = await Location.findOneAndUpdate(
-      { name: stateName, type: 'state' },
+      { name: stateName, type: 'state', parentId: countryDoc._id },
       {
-        $set: { parentId: countryDoc._id },
+        $set: { code: isoCode, isActive: true },
         $setOnInsert: {
           name: stateName,
           type: 'state',
-          code: isoCode,
-          isActive: true,
+          parentId: countryDoc._id,
         },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -120,11 +165,11 @@ async function importLocations() {
       const distDoc = await Location.findOneAndUpdate(
         { name: trimmed, type: 'district', parentId: stateDoc._id },
         {
+          $set: { isActive: true },
           $setOnInsert: {
             name: trimmed,
             type: 'district',
             parentId: stateDoc._id,
-            isActive: true,
           },
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -226,11 +271,11 @@ async function importLocations() {
         await Location.findOneAndUpdate(
           { name: cityName, type: 'city', parentId: dDoc._id },
           {
+            $set: { isActive: true },
             $setOnInsert: {
               name: cityName,
               type: 'city',
               parentId: dDoc._id,
-              isActive: true,
             },
           },
           { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -246,11 +291,29 @@ async function importLocations() {
   }
 
   console.log(
-    '\n[import:locations] Done: ' +
+    '\n[import:locations] Processed: ' +
     stateCnt + ' states, ' +
     districtCnt + ' districts, ' +
-    cityCnt + ' cities upserted under Country India.'
+    cityCnt + ' cities under Country India.'
   );
+  const [countryCount, stateCount, districtCount, cityCount, india] = await Promise.all([
+    Location.countDocuments({ type: 'country', isActive: true }),
+    Location.countDocuments({ type: 'state', parentId: countryDoc._id, isActive: true }),
+    Location.countDocuments({ type: 'district', isActive: true }),
+    Location.countDocuments({ type: 'city', isActive: true }),
+    Location.findById(countryDoc._id).select('name code').lean(),
+  ]);
+  if (
+    !countryCount
+    || !stateCount
+    || !districtCount
+    || !cityCount
+    || india?.name !== 'India'
+    || india?.code !== 'IN'
+  ) {
+    throw new Error('Post-import verification failed: country/state/district/city data is missing or India code is incorrect.');
+  }
+  console.log(`[import:locations] Verified totals: ${countryCount} countries, ${stateCount} India states, ${districtCount} districts, ${cityCount} cities.`);
   await mongoose.disconnect();
 }
 
@@ -258,6 +321,7 @@ importLocations()
   .then(() => process.exit(0))
   .catch((err) => {
     console.error('[import:locations] Failed:', err);
+    mongoose.disconnect().catch(() => {});
     process.exit(1);
   });
 
