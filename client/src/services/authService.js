@@ -11,6 +11,21 @@ export const authService = {
     return response.data;
   },
 
+  async requestLoginOtp(data) {
+    const response = await api.post('/auth/login/otp', data);
+    return response.data;
+  },
+
+  async resendLoginOtp(data) {
+    const response = await api.post('/auth/login/otp/resend', data);
+    return response.data;
+  },
+
+  async googleLogin(data) {
+    const response = await api.post('/auth/google', data);
+    return response.data;
+  },
+
   async verifyOtp(data) {
     const response = await api.post('/auth/otp-verify', data);
     return response.data;

@@ -1,11 +1,13 @@
 import app from './app.js';
 import env from './config/env.js';
 import connectDB from './config/db.js';
+import { verifySmtpConnection } from './services/emailService.js';
 
 const startServer = async () => {
   try {
     await connectDB();
     console.log('✅ MongoDB connected successfully');
+    await verifySmtpConnection();
 
     const server = app.listen(env.port, () => {
       console.log(`🚀 LocalFix API running in ${env.nodeEnv} mode on port ${env.port}`);

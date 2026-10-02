@@ -20,6 +20,7 @@
     "express": "^4.21.2",
     "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^7.4.1",
+    "google-auth-library": "^11.1.0",
     "helmet": "^8.0.0",
     "india-states-districts": "^1.8.0",
     "joi": "^17.13.3",
@@ -27,6 +28,7 @@
     "mongoose": "^8.9.5",
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
+    "nodemailer": "^10.0.13",
     "xss-clean": "^0.1.4"
   },
   "devDependencies": {

@@ -10,7 +10,6 @@ import {
   Trash2,
   LogOut,
   Moon,
-  Monitor,
   Phone,
   Mail,
   Sun,
@@ -111,15 +110,14 @@ export function SettingsPage() {
         <Card className="p-6 lg:hidden">
           <div className="flex items-center gap-3 mb-4">
             <div className="h-10 w-10 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
-              {theme === 'dark' ? <Moon className="h-5 w-5 text-primary-600 dark:text-primary-400" /> : theme === 'system' ? <Monitor className="h-5 w-5 text-primary-600 dark:text-primary-400" /> : <Sun className="h-5 w-5 text-primary-600 dark:text-primary-400" />}
+              {theme === 'dark' ? <Moon className="h-5 w-5 text-primary-600 dark:text-primary-400" /> : <Sun className="h-5 w-5 text-primary-600 dark:text-primary-400" />}
             </div>
             <div><h2 className="text-lg font-bold text-ink-light dark:text-ink-dark">Appearance</h2><p className="text-sm text-gray-500 dark:text-gray-400">Choose your display theme</p></div>
           </div>
-          <div className="grid grid-cols-3 gap-2 rounded-xl bg-gray-100 p-1 dark:bg-gray-800" role="group" aria-label="Display theme">
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1 dark:bg-gray-800" role="group" aria-label="Display theme">
             {[
               { id: 'light', label: 'Light', icon: Sun },
               { id: 'dark', label: 'Dark', icon: Moon },
-              { id: 'system', label: 'System', icon: Monitor },
             ].map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setTheme(id)} aria-pressed={theme === id} className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors sm:text-sm ${theme === id ? 'bg-white text-emerald-800 shadow-sm dark:bg-gray-700 dark:text-emerald-300' : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'}`}><Icon className="h-4 w-4" />{label}</button>)}
           </div>
         </Card>

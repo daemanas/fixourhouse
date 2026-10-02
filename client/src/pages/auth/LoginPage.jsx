@@ -1,30 +1,25 @@
 import { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowRight, Loader2, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { motion } from 'framer-motion';
-import { Phone, Lock, Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
-import Card from '../../components/ui/Card';
+import GoogleAuthButton from '../../components/auth/GoogleAuthButton';
+import { authService } from '../../services/authService';
+import { authErrorMessage } from '../../utils/authErrorMessage';
 
 export function LoginPage() {
-  const { login } = useAuth();
+  const { googleLogin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm();
 
   const redirectAfterLogin = (role) => {
-    const from = location.state?.from?.pathname;
-    if (from && role === 'customer') {
-      navigate(`${from}${location.state?.from?.search || ''}${location.state?.from?.hash || ''}`, {
+    const from = location.state?.from;
+    if (from?.pathname && role === 'customer') {
+      navigate(`${from.pathname}${from.search || ''}${from.hash || ''}`, {
         replace: true,
         state: location.state?.bookingServiceId
           ? { bookingServiceId: location.state.bookingServiceId }
@@ -32,149 +27,99 @@ export function LoginPage() {
       });
       return;
     }
-    switch (role) {
-      case 'admin':
-        navigate('/admin/analytics', { replace: true });
-        break;
-      case 'provider':
-        navigate('/provider/dashboard', { replace: true });
-        break;
-      default:
-        navigate('/customer/dashboard', { replace: true });
+    navigate(
+      role === 'admin' ? '/admin/analytics'
+        : role === 'provider' ? '/provider/dashboard'
+          : '/customer/dashboard',
+      { replace: true }
+    );
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      toast.error('Enter a valid email address.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const identity = { email: email.trim().toLowerCase() };
+      await authService.requestLoginOtp(identity);
+      toast.success('A login code has been sent.');
+      navigate('/auth/otp', {
+        state: { ...location.state, ...identity, channel: 'email', purpose: 'login' },
+      });
+    } catch (error) {
+      toast.error(authErrorMessage(error, 'Could not continue. Please try again.'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const onSubmit = async (data) => {
+  const handleGoogleCredential = async (idToken) => {
     setSubmitting(true);
     try {
-      const result = await login({ phone: data.phone, password: data.password });
-      toast.success('Welcome back!');
+      const result = await googleLogin({ idToken });
+      if (result.requiresRegistration) {
+        navigate('/auth/register', {
+          state: {
+            ...location.state,
+            googleRegistration: { idToken, email: result.email, name: result.name },
+          },
+        });
+        return;
+      }
+      toast.success('Welcome to LocalFix!');
       redirectAfterLogin(result.user.role);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Login failed. Please try again.');
+      toast.error(authErrorMessage(error, 'Google sign-in failed. Try signing up if you are new.'));
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
-      >
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-block">
-            <span className="text-3xl font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
-              LocalFix
-            </span>
-          </Link>
-          <h1 className="mt-6 text-2xl font-bold text-ink-light dark:text-ink-dark">Welcome back</h1>
-          <p className="mt-2 text-gray-500 dark:text-gray-400">Sign in to continue to your account</p>
+    <div>
+      <div className="mb-6 text-center lg:text-left">
+        <h2 className="text-2xl font-extrabold tracking-tight text-slate-950 dark:text-white">Sign in to LocalFix</h2>
+        <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Your trusted local services are just a step away.</p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="login-email" className="mb-1.5 block text-sm font-semibold text-slate-800 dark:text-slate-200">Email Address</label>
+          <div className="relative">
+            <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-700" />
+            <Input
+              id="login-email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              className="min-h-14 rounded-xl pl-10"
+            />
+          </div>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">We’ll email you a one-time verification code.</p>
         </div>
 
-        <Card className="p-8">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-ink-light dark:text-ink-dark mb-2">
-                Phone Number
-              </label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  type="tel"
-                  placeholder="+91 98765 43210"
-                  className="pl-10"
-                  {...register('phone', {
-                    required: 'Phone number is required',
-                    pattern: {
-                      value: /^[+]?[0-9]{10,15}$/,
-                      message: 'Enter a valid phone number',
-                    },
-                  })}
-                />
-              </div>
-              {errors.phone && (
-                <p className="mt-1 text-sm text-danger-600 dark:text-danger-400">{errors.phone.message}</p>
-              )}
-            </div>
+        <Button type="submit" fullWidth size="lg" disabled={submitting} className="!min-h-12 !rounded-xl !bg-emerald-700 !text-white hover:!bg-emerald-800">
+          {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Please wait...</> : <>Send OTP <ArrowRight className="h-4 w-4" /></>}
+        </Button>
+      </form>
 
-            <div>
-              <label className="block text-sm font-medium text-ink-light dark:text-ink-dark mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
-                  className="pl-10 pr-10"
-                  {...register('password', {
-                    required: 'Password is required',
-                    minLength: { value: 6, message: 'Password must be at least 6 characters' },
-                  })}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              {errors.password && (
-                <p className="mt-1 text-sm text-danger-600 dark:text-danger-400">{errors.password.message}</p>
-              )}
-            </div>
+      <div className="my-5 flex items-center gap-3 text-xs text-slate-400">
+        <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />or continue with<span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+      </div>
+      <GoogleAuthButton onCredential={handleGoogleCredential} disabled={submitting} />
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                />
-                Remember me
-              </label>
-              <Link
-                to="/auth/forgot-password"
-                className="text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700"
-              >
-                Forgot password?
-              </Link>
-            </div>
-
-            <Button type="submit" fullWidth size="lg" disabled={submitting}>
-              {submitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                <>
-                  Sign In
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              )}
-            </Button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Don't have an account?{' '}
-              <Link
-                to="/auth/register"
-                state={location.state}
-                className="font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700"
-              >
-                Register now
-              </Link>
-            </p>
-          </div>
-        </Card>
-      </motion.div>
+      <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-300">
+        Don't have an account?{' '}
+        <Link to="/auth/register" state={location.state} className="font-bold text-emerald-700 hover:underline dark:text-emerald-300">Sign Up</Link>
+      </p>
+      <p className="mt-3 text-center text-xs text-slate-400">
+        <Link to="/auth/forgot-password" className="hover:text-emerald-700 hover:underline">Forgot your password?</Link>
+      </p>
     </div>
   );
 }

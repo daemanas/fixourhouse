@@ -1,9 +1,30 @@
 import dotenv from 'dotenv';
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config();
+const serverRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+dotenv.config({ path: resolve(serverRoot, '.env') });
+
+const smtp = {
+  host: process.env.SMTP_HOST || '',
+  port: Number(process.env.SMTP_PORT || 465),
+  secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+  user: process.env.SMTP_USER || '',
+  pass: process.env.SMTP_PASS || '',
+  from: process.env.SMTP_FROM || '',
+  portConfigured: Boolean(process.env.SMTP_PORT),
+  secureConfigured: Boolean(process.env.SMTP_SECURE),
+  configured: Boolean(
+    process.env.SMTP_HOST
+    && process.env.SMTP_PORT
+    && process.env.SMTP_SECURE !== undefined
+    && process.env.SMTP_USER
+    && process.env.SMTP_PASS
+    && process.env.SMTP_FROM
+  ),
+};
 
 const isProd = process.env.NODE_ENV === 'production';
-
 const requiredInProd = ['MONGODB_URI', 'JWT_SECRET', 'CLIENT_URL'];
 
 if (isProd) {
@@ -24,7 +45,20 @@ const env = {
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
   rateLimitMax: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
-  otpExpiresIn: parseInt(process.env.OTP_EXPIRES_IN || '300', 10),
+  otpExpiresIn: 600,
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  twilioAccountSid: process.env.TWILIO_ACCOUNT_SID || '',
+  twilioAuthToken: process.env.TWILIO_AUTH_TOKEN || '',
+  twilioPhoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
+  smtpHost: process.env.SMTP_HOST || '',
+  smtpPort: Number.parseInt(process.env.SMTP_PORT || '0', 10),
+  smtpSecure: process.env.SMTP_SECURE === 'true',
+  smtpSecureConfigured: Boolean(process.env.SMTP_SECURE),
+  smtpPortConfigured: Boolean(process.env.SMTP_PORT),
+  smtpUser: process.env.SMTP_USER || '',
+  smtpPass: process.env.SMTP_PASS || '',
+  smtpFrom: process.env.SMTP_FROM || '',
+  smtp,
 };
 
 export default env;

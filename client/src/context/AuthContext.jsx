@@ -40,6 +40,21 @@ export function AuthProvider({ children }) {
     [persistAuth]
   );
 
+  const googleLogin = useCallback(
+    async (data) => {
+      setLoading(true);
+      try {
+        const response = await authService.googleLogin(data);
+        const { token: newToken, user: newUser } = response.data;
+        persistAuth(newToken, newUser);
+        return response.data;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [persistAuth]
+  );
+
   const register = useCallback(
     async (data) => {
       setLoading(true);
@@ -106,6 +121,7 @@ export function AuthProvider({ children }) {
     isProvider: user?.role === 'provider',
     isAdmin: user?.role === 'admin',
     login,
+    googleLogin,
     register,
     verifyOtp,
     logout,

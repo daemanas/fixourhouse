@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import { authService } from '../../services/authService';
+import { authErrorMessage } from '../../utils/authErrorMessage';
 
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN = 30;
@@ -16,6 +17,10 @@ export function OtpPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const phone = location.state?.phone || '';
+  const email = location.state?.email || '';
+  const channel = location.state?.channel || (email ? 'email' : 'phone');
+  const identity = channel === 'email' ? { email } : { phone };
+  const destination = email || phone;
   const purpose = location.state?.purpose || 'registration';
   const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(''));
   const [submitting, setSubmitting] = useState(false);
@@ -87,8 +92,8 @@ export function OtpPage() {
       toast.error('Please enter the complete OTP');
       return;
     }
-    if (!phone) {
-      toast.error('Phone number is missing. Please try again.');
+    if (!destination) {
+      toast.error('Verification destination is missing. Please try again.');
       return;
     }
     setSubmitting(true);
@@ -102,28 +107,32 @@ export function OtpPage() {
         toast.success('Phone verified! Please set a new password.');
         navigate('/auth/reset-password', { state: { token: resetToken } });
       } else {
-        const result = await verifyOtp({ phone, otp: code });
-        toast.success('Phone verified successfully!');
+        const result = await verifyOtp({ ...identity, otp: code, purpose });
+        toast.success(`${channel === 'email' ? 'Email' : 'Phone'} verified successfully!`);
         redirectAfterVerify(result?.user?.role);
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Invalid OTP. Please try again.');
+      toast.error(authErrorMessage(error, 'Invalid or expired OTP. Please request a new OTP.'));
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleResend = async () => {
-    if (!phone) {
-      toast.error('Phone number is missing. Please try again.');
+    if (!destination) {
+      toast.error('Verification destination is missing. Please try again.');
       return;
     }
-    setCooldown(RESEND_COOLDOWN);
     try {
-      await authService.resendOtp({ phone });
-      toast.success('OTP resent to your phone');
+      if (purpose === 'login') {
+        await authService.resendLoginOtp(identity);
+      } else {
+        await authService.resendOtp({ ...identity, purpose });
+      }
+      setCooldown(RESEND_COOLDOWN);
+      toast.success(channel === 'email' ? 'OTP resent to your email.' : 'OTP resent to your phone.');
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to resend OTP. Please try again.');
+      toast.error(authErrorMessage(error, 'Failed to resend OTP. Please try again.'));
     }
   };
 
@@ -139,9 +148,9 @@ export function OtpPage() {
           <div className="h-16 w-16 mx-auto rounded-2xl bg-gradient-to-br from-primary-500 to-secondary-600 flex items-center justify-center mb-6">
             <ShieldCheck className="h-8 w-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-ink-light dark:text-ink-dark">Verify your phone</h1>
+          <h1 className="text-2xl font-bold text-ink-light dark:text-ink-dark">Verify your {channel === 'email' ? 'email' : 'phone'}</h1>
           <p className="mt-2 text-gray-500 dark:text-gray-400">
-            We sent a 6-digit OTP to <span className="font-medium text-ink-light dark:text-ink-dark">{phone || 'your phone'}</span>
+            Enter the 6-digit OTP sent to <span className="font-medium text-ink-light dark:text-ink-dark">{destination || 'your contact'}</span>
           </p>
         </div>
 

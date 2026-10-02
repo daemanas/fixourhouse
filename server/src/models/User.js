@@ -12,8 +12,8 @@ const userSchema = new mongoose.Schema(
     },
     phone: {
       type: String,
-      required: [true, 'Phone number is required'],
       unique: true,
+      sparse: true,
       trim: true,
       match: [/^[6-9]\d{9}$/, 'Please enter a valid 10-digit Indian phone number'],
     },
@@ -21,8 +21,12 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
       lowercase: true,
+      unique: true,
+      sparse: true,
       match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email'],
     },
+    phoneVerified: { type: Boolean, default: false },
+    emailVerified: { type: Boolean, default: false },
     password: {
       type: String,
       required: [true, 'Password is required'],
@@ -80,6 +84,12 @@ const userSchema = new mongoose.Schema(
     otp: {
       code: String,
       expiresAt: Date,
+      attempts: { type: Number, default: 0 },
+      resendAvailableAt: Date,
+      purpose: {
+        type: String,
+        enum: ['registration', 'login', 'reset-password'],
+      },
     },
     resetPasswordToken: String,
     resetPasswordExpires: Date,
@@ -88,12 +98,13 @@ const userSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    autoIndex: false,
   }
 );
 
 // Hash password before save
 userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password') || this.$locals.passwordIsHashed) return next();
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
   next();
@@ -105,7 +116,6 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 };
 
 // Indexes
-userSchema.index({ phone: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ status: 1 });
 

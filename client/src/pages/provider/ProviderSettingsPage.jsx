@@ -8,7 +8,6 @@ import {
   Globe,
   Sun,
   Moon,
-  Monitor,
   Shield,
   Wallet,
   LifeBuoy,
@@ -58,7 +57,7 @@ const DEFAULT_SETTINGS = {
     marketingEmails: false,
   },
   appearance: {
-    theme: 'system',
+    theme: 'light',
   },
   privacy: {
     profileVisibility: 'public',
@@ -179,7 +178,7 @@ export function ProviderSettingsPage() {
           payment: { ...DEFAULT_SETTINGS.payment, ...(fetched.payment || {}) },
         };
         setSettings(merged);
-        if (merged.appearance?.theme) setTheme(merged.appearance.theme);
+        if (['light', 'dark'].includes(merged.appearance?.theme)) setTheme(merged.appearance.theme);
       }
     } catch (err) {
       const status = err?.response?.status;
@@ -454,7 +453,6 @@ export function ProviderSettingsPage() {
               {[
                 { value: 'light', label: 'Light Mode', icon: Sun },
                 { value: 'dark', label: 'Dark Mode', icon: Moon },
-                { value: 'system', label: 'System Default', icon: Monitor },
               ].map((opt) => {
                 const active = settings.appearance.theme === opt.value;
                 return (

@@ -13,7 +13,18 @@ import { UPLOADS_ROOT } from './utils/upload.js';
 const app = express();
 
 // Security middleware
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        'script-src': ["'self'", 'https://accounts.google.com/gsi/client'],
+        'frame-src': ["'self'", 'https://accounts.google.com/gsi/'],
+        'connect-src': ["'self'", 'https://accounts.google.com/gsi/'],
+      },
+    },
+  })
+);
 app.use(
   cors({
     origin: env.clientUrl,
